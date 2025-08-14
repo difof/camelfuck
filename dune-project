@@ -8,3 +8,11 @@
  (github difof/camelfuck))
 
 (license MIT)
+
+(package
+ (name camelfuck)
+ (synopsis "Brainfuck interpreter")
+ (description "Brainfuck interpreter in OCaml.")
+ (depends ocaml)
+ (tags
+  (ocaml brainfuck)))
