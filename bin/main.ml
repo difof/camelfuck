@@ -63,7 +63,7 @@ end = struct
     let result =
       String.foldi p ~init:(Ok []) ~f:(fun pc acc ch ->
         match acc with
-        | Error _ as e -> e
+        | Error _ as err -> err
         | Ok stack ->
           (match ch with
            | '[' -> Ok (pc :: stack)
@@ -79,7 +79,7 @@ end = struct
     match result with
     | Ok [] -> Ok jump_table
     | Ok (hd :: _) -> Error (MissingCloseBracket (hd + 1))
-    | Error _ as e -> e
+    | Error _ as err -> err
   ;;
 
   let of_string (input, output) p =
