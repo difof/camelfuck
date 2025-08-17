@@ -1,4 +1,5 @@
 (executable
+ (package camelfuck)
  (public_name camelfuck)
  (name main)
- (libraries core stdio))
+ (libraries core stdio tape))

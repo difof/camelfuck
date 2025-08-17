@@ -16,3 +16,6 @@
  (depends ocaml)
  (tags
   (ocaml brainfuck)))
+
+(package
+ (name tape))
