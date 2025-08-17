@@ -1,41 +1,15 @@
 open Core
 open Stdio
 
-(* Unbounded bi-directional tape memory *)
-module Tape : sig
-  type t
-
-  val create : unit -> t
-  val get_current : t -> int option
-  val set_current : t -> int -> unit
-  val forward : t -> unit
-  val backward : t -> unit
-end = struct
-  type t =
-    { mutable pos : int
-    ; cells : int Int.Table.t
-    }
-
-  let create () = { pos = 0; cells = Hashtbl.create (module Int) }
-  let get_current t = Hashtbl.find t.cells t.pos
-
-  let set_current t v =
-    let v = v land 0xFF in
-    Hashtbl.set t.cells ~key:t.pos ~data:v
-  ;;
-
-  let forward t = t.pos <- t.pos + 1
-  let backward t = t.pos <- t.pos - 1
-end
-
-module Brainfuck : sig
+(*module Brainfuck : sig
   type t
   type error
 
   val of_string : In_channel.t * Out_channel.t -> string -> (t, error) result
   val eval : t -> (t, error) result
   val pp_error : Format.formatter -> error -> unit
-end = struct
+end = *)
+module Brainfuck (Tape : Tape.S) = struct
   type jump_table = int Int.Table.t
   type memory = Tape.t
 
