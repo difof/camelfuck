@@ -1,4 +1,4 @@
-open Tape.ArrayTape
+open Tape.Arraytape
 
 let test_create () =
   let tape = create () in
