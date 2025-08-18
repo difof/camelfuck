@@ -2,8 +2,6 @@
 
 (name camelfuck)
 
-(generate_opam_files true)
-
 (source
  (github difof/camelfuck))
 
