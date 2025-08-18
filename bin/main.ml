@@ -74,10 +74,10 @@ module Brainfuck (Tape : Tape.S) = struct
     t
   ;;
 
-  let get_cell t = Tape.get_current t.memory |> Option.value ~default:0
+  let get_cell t = Tape.get t.memory
 
   let cell_op t f =
-    Tape.set_current t.memory @@ f @@ get_cell t;
+    Tape.set t.memory @@ f @@ get_cell t;
     t
   ;;
 
@@ -90,10 +90,10 @@ module Brainfuck (Tape : Tape.S) = struct
   let exec_instr t =
     match t.program.[t.pc] with
     | '>' ->
-      Tape.forward t.memory;
+      Tape.move t.memory 1;
       t
     | '<' ->
-      Tape.backward t.memory;
+      Tape.move t.memory (-1);
       t
     | '+' -> cell_op t (fun v -> v + 1)
     | '-' -> cell_op t (fun v -> v - 1)
@@ -115,7 +115,9 @@ module Brainfuck (Tape : Tape.S) = struct
   ;;
 end
 
-let run p = Brainfuck.(p |> of_string (stdin, stdout) |> Result.bind ~f:eval)
+module BrainfuckHashTape = Brainfuck (Tape.HashTape)
+
+let run p = BrainfuckHashTape.(p |> of_string (stdin, stdout) |> Result.bind ~f:eval)
 
 let program_from_argv_or_stdin () =
   let argv = Sys.get_argv () in
@@ -130,6 +132,6 @@ let program_from_argv_or_stdin () =
 
 let () =
   match program_from_argv_or_stdin () |> run with
-  | Error err -> Format.eprintf "error: %a@\n" Brainfuck.pp_error err
+  | Error err -> Format.eprintf "error: %a@\n" BrainfuckHashTape.pp_error err
   | Ok _ -> ()
 ;;
