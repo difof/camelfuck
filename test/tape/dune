@@ -1,0 +1,4 @@
+(test
+ (name test_arraytape)
+ (libraries tape alcotest)
+ (modules test_arraytape))
