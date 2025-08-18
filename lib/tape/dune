@@ -1,5 +1,5 @@
 (library
  (name tape)
  (public_name tape)
- (modules tape hashtape arraytape)
+ (wrapped true)
  (libraries core))

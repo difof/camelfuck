@@ -8,5 +8,5 @@ module type S = sig
   val move : t -> int -> unit
 end
 
-module Hashtape = Hashtape
-module Arraytape = Arraytape
+module Hashtape : S
+module Arraytape : S
