@@ -9,6 +9,7 @@ open Stdio
   val eval : t -> (t, error) result
   val pp_error : Format.formatter -> error -> unit
 end = *)
+
 module Brainfuck (Tape : Tape.S) = struct
   type jump_table = int Int.Table.t
   type memory = Tape.t
@@ -115,7 +116,7 @@ module Brainfuck (Tape : Tape.S) = struct
   ;;
 end
 
-module BrainfuckHashTape = Brainfuck (Tape.HashTape)
+module BrainfuckHashTape = Brainfuck (Tape.Hashtape)
 
 let run p = BrainfuckHashTape.(p |> of_string (stdin, stdout) |> Result.bind ~f:eval)
 
