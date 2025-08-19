@@ -57,7 +57,6 @@ let test_move_across_zero () =
 
 let test_large_moves () =
   let tape = create () in
-  (* Test moving beyond initial page size (256) *)
   move tape 550;
   Alcotest.(check int) "move to position 550" 550 (pos tape);
   set tape 100;
@@ -75,14 +74,12 @@ let test_large_moves () =
 
 let test_reallocation () =
   let tape = create () in
-  (* Test that reallocation preserves existing values *)
   let positions = [ 100; 200; 300; 400; 500 ] in
   List.iteri
     (fun i position ->
        move tape (position - pos tape);
        set tape (i + 1))
     positions;
-  (* Verify all values are preserved *)
   List.iteri
     (fun i position ->
        move tape (position - pos tape);
