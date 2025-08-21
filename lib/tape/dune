@@ -1,5 +1,4 @@
 (library
  (name tape)
  (public_name tape)
- (wrapped true)
  (libraries core))
