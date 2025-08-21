@@ -1,9 +1,4 @@
 (test
- (name test_arraytape)
+ (name test_tape)
  (libraries tape alcotest)
- (modules test_arraytape))
-
-(test
- (name test_hashtape)
- (libraries tape alcotest)
- (modules test_hashtape))
+ (modules test_tape))
