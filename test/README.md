@@ -11,11 +11,7 @@ dune runtest
 
 To run tests for a specific module:
 ```bash
-dune exec test/tape/test_arraytape.exe
-```
-or
-```bash
-dune exec test/tape/test_hashtape.exe
+dune exec test/tape/test_tape.exe
 ```
 
 To run tests in watch mode (re-run on file changes):
