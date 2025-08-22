@@ -1,16 +1,7 @@
 open Core
 open Stdio
 
-(*module Brainfuck : sig
-  type t
-  type error
-
-  val of_string : In_channel.t * Out_channel.t -> string -> (t, error) result
-  val eval : t -> (t, error) result
-  val pp_error : Format.formatter -> error -> unit
-end = *)
-
-module Brainfuck (Tape : Tape.S) = struct
+module Brainfuck = struct
   type jump_table = int Int.Table.t
   type memory = Tape.t
 
@@ -27,10 +18,12 @@ module Brainfuck (Tape : Tape.S) = struct
   type error =
     | MissingOpenBracket of int
     | MissingCloseBracket of int
+    | TapeError of Tape.error
 
   let pp_error fmt = function
     | MissingOpenBracket pc -> Format.fprintf fmt "missing open bracket at %d" pc
     | MissingCloseBracket pc -> Format.fprintf fmt "missing closing bracket for %d" pc
+    | TapeError err -> Tape.pp_error fmt err
   ;;
 
   let make_jump_table p =
@@ -63,7 +56,7 @@ module Brainfuck (Tape : Tape.S) = struct
       { program = p
       ; program_length = String.length p
       ; pc = 0
-      ; memory = Tape.create ()
+      ; memory = Tape.create 4096
       ; jump_table
       ; input
       ; output
@@ -91,10 +84,10 @@ module Brainfuck (Tape : Tape.S) = struct
   let exec_instr t =
     match t.program.[t.pc] with
     | '>' ->
-      Tape.move t.memory 1;
+      Tape.move_exn t.memory 1;
       t
     | '<' ->
-      Tape.move t.memory (-1);
+      Tape.move_exn t.memory (-1);
       t
     | '+' -> cell_op t (fun v -> v + 1)
     | '-' -> cell_op t (fun v -> v - 1)
@@ -111,14 +104,15 @@ module Brainfuck (Tape : Tape.S) = struct
     | _ -> t
   ;;
 
-  let rec eval t =
-    if t.pc >= t.program_length then Ok t else eval (exec_instr t |> advance)
+  let rec eval_exn t =
+    if t.pc >= t.program_length then t else eval_exn (exec_instr t |> advance)
+  ;;
+
+  let run p =
+    try p |> of_string (stdin, stdout) |> Result.map ~f:eval_exn with
+    | Tape.TapeExn err -> Error (TapeError err)
   ;;
 end
-
-module BrainfuckHashTape = Brainfuck (Tape.Hashtape)
-
-let run p = BrainfuckHashTape.(p |> of_string (stdin, stdout) |> Result.bind ~f:eval)
 
 let program_from_argv_or_stdin () =
   let argv = Sys.get_argv () in
@@ -132,7 +126,7 @@ let program_from_argv_or_stdin () =
 ;;
 
 let () =
-  match program_from_argv_or_stdin () |> run with
-  | Error err -> Format.eprintf "error: %a@\n" BrainfuckHashTape.pp_error err
+  match program_from_argv_or_stdin () |> Brainfuck.run with
+  | Error err -> Format.eprintf "error: %a@\n" Brainfuck.pp_error err
   | Ok _ -> ()
 ;;
