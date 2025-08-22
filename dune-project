@@ -19,4 +19,4 @@
  (name tape))
 
 (package
- (name compiler))
+ (name encoder))

@@ -1,0 +1,4 @@
+(library
+ (name encoder)
+ (public_name encoder)
+ (libraries core))
