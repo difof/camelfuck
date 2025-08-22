@@ -17,3 +17,6 @@
 
 (package
  (name tape))
+
+(package
+ (name compiler))
