@@ -1,4 +1,0 @@
-(library
- (name compiler)
- (public_name compiler)
- (libraries core))
