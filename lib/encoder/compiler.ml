@@ -84,6 +84,36 @@ let optimize_instructions instructions =
   optimize [] instructions
 ;;
 
+(* detect common patterns and replace with specialized instructions *)
+let pattern_optimize instructions =
+  let rec optimize acc = function
+    | [] -> List.rev acc
+    | Instruction.Jz _ :: Instruction.Sub1 :: Instruction.Jnz _ :: rest ->
+      (* optimized [-] *)
+      optimize (Instruction.SetZero :: acc) rest
+    | Instruction.Jz 5
+      :: Instruction.Move1R
+      :: Instruction.Add1
+      :: Instruction.Move1L
+      :: Instruction.Sub1
+      :: Instruction.Jnz -5
+      :: rest ->
+      (* optimized [>+<-] *)
+      optimize (Instruction.Copy :: acc) rest
+    | Instruction.Jz 5
+      :: Instruction.Jz 3
+      :: Instruction.Jz 1
+      :: Instruction.Jnz -1
+      :: Instruction.Jnz -3
+      :: Instruction.Jnz -5
+      :: rest ->
+      (* [[[]]] pattern: runtime CALL extension *)
+      optimize (Instruction.Call :: acc) rest
+    | instr :: rest -> optimize (instr :: acc) rest
+  in
+  optimize [] instructions
+;;
+
 let encode_to_bytes instructions =
   List.fold instructions ~init:[] ~f:(fun acc instr ->
     match Instruction.encode instr with
