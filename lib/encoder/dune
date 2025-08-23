@@ -1,5 +1,5 @@
 (library
  (name encoder)
  (public_name encoder)
- (modules instruction)
+ (modules compiler instruction)
  (libraries core))
