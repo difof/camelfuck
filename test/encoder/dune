@@ -1,0 +1,4 @@
+(test
+ (name test_instruction)
+ (libraries encoder alcotest)
+ (modules test_instruction))
