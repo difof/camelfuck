@@ -65,6 +65,25 @@ let resolve_jumps instructions =
     | Instr real_instr -> real_instr)
 ;;
 
+(* apply peephole optimizations *)
+let optimize_instructions instructions =
+  let rec optimize acc = function
+    | [] -> List.rev acc
+    | Instruction.Add 1 :: rest -> optimize (Instruction.Add1 :: acc) rest
+    | Instruction.Sub 1 :: rest -> optimize (Instruction.Sub1 :: acc) rest
+    | Instruction.Move 1 :: rest -> optimize (Instruction.Move1R :: acc) rest
+    | Instruction.Move -1 :: rest -> optimize (Instruction.Move1L :: acc) rest
+    | Instruction.Add n :: Instruction.Sub m :: rest when n = m ->
+      (* +n followed by -n cancels out *)
+      optimize acc rest
+    | Instruction.Sub n :: Instruction.Add m :: rest when n = m ->
+      (* -n followed by +n cancels out *)
+      optimize acc rest
+    | instr :: rest -> optimize (instr :: acc) rest
+  in
+  optimize [] instructions
+;;
+
 let encode_to_bytes instructions =
   List.fold instructions ~init:[] ~f:(fun acc instr ->
     match Instruction.encode instr with
