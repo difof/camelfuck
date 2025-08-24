@@ -78,7 +78,7 @@ These operations are useful for implementing Brainfuck extensions or optimizing 
 
 ```ocaml
 (* create a tape with middle bias and 1KB initial size *)
-let tape = Tape.create ~bias_offset:`Middle 1024 in
+let tape = Tape.create 1024 in
 
 (* move around and manipulate data *)
 Tape.move_exn tape 10;
@@ -96,6 +96,6 @@ Tape.blit_in_ensure_exn tape data 5;
 
 ## Configuration Options
 
-- `bias_offset`: Choose `` `Start`` or `` `Middle`` based on program's memory growth patterns
+- `bias_offset`: Choose `Start` or `Middle` based on program's memory growth patterns
 - `max_size`: Set upper limit on tape size (default: 16KB)
 - `initial_size`: Starting buffer size (minimum: 256 bytes)
