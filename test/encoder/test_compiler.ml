@@ -68,8 +68,53 @@ let show_error = function
   | EncodingError _ -> "EncodingError"
 ;;
 
+let show_offset = function
+  | IntInstrWOffset (instr, off) -> Format.asprintf "%s@%d" (show_intermediate instr) off
+;;
+
+let expect_offsets name source expected =
+  let actual = parse_sequence source |> map_offsets in
+  let actual_s = List.map show_offset actual in
+  let expected_s = List.map show_offset expected in
+  Alcotest.(check (list string)) name expected_s actual_s
+;;
+
+let test_offsets_empty () =
+  expect_offsets
+    "offsets for empty loop"
+    "[]"
+    [ IntInstrWOffset (OpenLoop, 0); IntInstrWOffset (CloseLoop, 5) ]
+;;
+
+let test_offsets_mixed () =
+  (* "+[>+<-]-." -> offsets:
+     addn(1)@0 (2 bytes)
+     [@2 (5 bytes)
+     movenr(1)@7 (2 bytes)
+     addn(1)@9 (2 bytes)
+     movenl(1)@11 (2 bytes)
+     subn(1)@13 (2 bytes)
+     ]@15 (5 bytes)
+     subn(1)@20 (2 bytes)
+     out@22 (1 byte)
+  *)
+  expect_offsets
+    "offsets for mixed sequence"
+    "+[>+<-]-."
+    [ IntInstrWOffset (Instr (AddN 1), 0)
+    ; IntInstrWOffset (OpenLoop, 2)
+    ; IntInstrWOffset (Instr (MoveNR 1), 7)
+    ; IntInstrWOffset (Instr (AddN 1), 9)
+    ; IntInstrWOffset (Instr (MoveNL 1), 11)
+    ; IntInstrWOffset (Instr (SubN 1), 13)
+    ; IntInstrWOffset (CloseLoop, 15)
+    ; IntInstrWOffset (Instr (SubN 1), 20)
+    ; IntInstrWOffset (Instr Out, 22)
+    ]
+;;
+
 let expect_resolve name source expected =
-  let inter = parse_sequence source in
+  let inter = parse_sequence source |> map_offsets in
   match resolve_jumps inter with
   | Ok actual ->
     Alcotest.(check (list string))
@@ -80,27 +125,27 @@ let expect_resolve name source expected =
 ;;
 
 let expect_resolve_error name source expected_err_s =
-  let inter = parse_sequence source in
+  let inter = parse_sequence source |> map_offsets in
   match resolve_jumps inter with
   | Ok _ -> Alcotest.failf "%s: expected Error, got Ok" name
   | Error err -> Alcotest.(check string) name expected_err_s (show_error err)
 ;;
 
-let test_resolve_empty () = expect_resolve "empty loop" "[]" [ Jz 1; Jnz (-1) ]
+let test_resolve_empty () = expect_resolve "empty loop" "[]" [ Jz 5; Jnz (-5) ]
 
 let test_resolve_with_body () =
-  expect_resolve "loop with body" "[+-]" [ Jz 3; AddN 1; SubN 1; Jnz (-3) ]
+  expect_resolve "loop with body" "[+-]" [ Jz 9; AddN 1; SubN 1; Jnz (-9) ]
 ;;
 
 let test_resolve_nested () =
-  expect_resolve "nested loops" "[[]]" [ Jz 3; Jz 1; Jnz (-1); Jnz (-3) ]
+  expect_resolve "nested loops" "[[]]" [ Jz 15; Jz 5; Jnz (-5); Jnz (-15) ]
 ;;
 
 let test_resolve_mixed () =
   expect_resolve
     "mixed with body around"
     "+[>+<-]-"
-    [ AddN 1; Jz 5; MoveNR 1; AddN 1; MoveNL 1; SubN 1; Jnz (-5); SubN 1 ]
+    [ AddN 1; Jz 13; MoveNR 1; AddN 1; MoveNL 1; SubN 1; Jnz (-13); SubN 1 ]
 ;;
 
 let test_resolve_unmatched_close () =
@@ -133,6 +178,10 @@ let () =
         ; test_case "counts capped" `Quick test_counts_capped
         ; test_case "loops" `Quick test_loops
         ; test_case "ignores" `Quick test_ignores
+        ] )
+    ; ( "map_offsets"
+      , [ test_case "empty" `Quick test_offsets_empty
+        ; test_case "mixed" `Quick test_offsets_mixed
         ] )
     ; ( "resolve_jumps"
       , [ test_case "empty" `Quick test_resolve_empty
