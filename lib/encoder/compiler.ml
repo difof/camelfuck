@@ -88,7 +88,7 @@ let optimize_instructions instructions =
 let pattern_optimize instructions =
   let rec optimize acc = function
     | [] -> List.rev acc
-    | Instruction.Jz _ :: Instruction.Sub1 :: Instruction.Jnz _ :: rest ->
+    | Instruction.Jz 2 :: Instruction.Sub1 :: Instruction.Jnz -2 :: rest ->
       (* optimized [-] *)
       optimize (Instruction.SetZero :: acc) rest
     | Instruction.Jz 5
