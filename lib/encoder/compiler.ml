@@ -5,6 +5,11 @@ type intermediate_instr =
   | OpenLoop
   | CloseLoop
 
+type error =
+  | UnmatchedClosingBracket
+  | UnmatchedOpeningBracket
+  | EncodingError of Instruction.error
+
 let parse_sequence source =
   (* count consecutive identical characters *)
   let rec count_consecutive pos target_char acc =
@@ -57,7 +62,7 @@ let parse_sequence source =
   parse [] 0
 ;;
 
-(* apply peephole/micro optimizations on intermediate tokens (preserving loops) *)
+(* apply micro optimizations on intermediate tokens *)
 let optimize_instructions instructions =
   let rec optimize acc = function
     | [] -> List.rev acc
@@ -102,39 +107,49 @@ let pattern_optimize instructions =
 ;;
 
 let resolve_jumps instructions =
-  let jump_table = Hashtbl.create (module Int) in
-  let bracket_stack = ref [] in
-  List.iteri instructions ~f:(fun i instr ->
-    match instr with
-    | OpenLoop -> bracket_stack := i :: !bracket_stack
-    | CloseLoop ->
-      (match !bracket_stack with
-       | open_i :: rest ->
-         bracket_stack := rest;
-         Hashtbl.set jump_table ~key:open_i ~data:i;
-         Hashtbl.set jump_table ~key:i ~data:open_i
-       | [] -> failwith "Unmatched closing bracket")
-    | _ -> ());
-  if not (List.is_empty !bracket_stack) then failwith "Unmatched opening bracket(s)";
-  (* convert to final instructions with relative jumps *)
+  let open Result in
+  (let jt = Hashtbl.create (module Int) in
+   match
+     (* build jump table via stack *)
+     List.foldi instructions ~init:(Ok []) ~f:(fun i acc instr ->
+       acc
+       >>= fun stack ->
+       match instr with
+       | OpenLoop -> Ok (i :: stack)
+       | CloseLoop ->
+         (match stack with
+          | hd :: rest ->
+            Hashtbl.set jt ~key:hd ~data:i;
+            Hashtbl.set jt ~key:i ~data:hd;
+            Ok rest
+          | [] -> Error UnmatchedClosingBracket)
+       | _ -> Ok stack)
+   with
+   | Ok [] -> Ok jt
+   | Ok (_ :: _) -> Error UnmatchedOpeningBracket
+   | Error _ as err -> err)
+  >>| fun jt ->
+  (* map jump table to Instruction.t *)
   List.mapi instructions ~f:(fun i instr ->
     match instr with
     | OpenLoop ->
-      let target = Hashtbl.find_exn jump_table i in
+      let target = Hashtbl.find_exn jt i in
       Instruction.Jz (target - i)
     | CloseLoop ->
-      let target = Hashtbl.find_exn jump_table i in
+      let target = Hashtbl.find_exn jt i in
       Instruction.Jnz (target - i)
     | Instr real_instr -> real_instr)
 ;;
 
 let encode_to_bytes instructions =
-  List.fold instructions ~init:[] ~f:(fun acc instr ->
+  let open Result in
+  List.fold instructions ~init:(Ok []) ~f:(fun acc instr ->
+    acc
+    >>= fun acc ->
     match Instruction.encode instr with
-    | Ok bytes -> bytes :: acc
-    | Error error ->
-      failwith (Format.asprintf "Encoding error: %a" Instruction.pp_error error))
-  |> List.rev
+    | Ok bytes -> Ok (bytes :: acc)
+    | Error err -> Error (EncodingError err))
+  >>| List.rev
 ;;
 
 let combine_instruction_bytes instr_bytes_list =
@@ -152,11 +167,12 @@ let combine_instruction_bytes instr_bytes_list =
 ;;
 
 let compile source =
+  let open Result in
   source
   |> parse_sequence
   |> pattern_optimize
   |> optimize_instructions
   |> resolve_jumps
-  |> encode_to_bytes
-  |> combine_instruction_bytes
+  >>= encode_to_bytes
+  >>| combine_instruction_bytes
 ;;
