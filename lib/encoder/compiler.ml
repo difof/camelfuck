@@ -29,25 +29,29 @@ let parse_sequence source =
       match source.[pos] with
       | '+' ->
         let count, next_pos = count_consecutive pos '+' 0 in
-        let chunks = chunkify count |> List.map ~f:(fun n -> Instr (Instruction.Add n)) in
+        let chunks =
+          chunkify count |> List.map ~f:(fun n -> Instr (Instruction.AddN n))
+        in
         let acc = List.fold chunks ~init:acc ~f:(fun acc i -> i :: acc) in
         parse next_pos acc
       | '-' ->
         let count, next_pos = count_consecutive pos '-' 0 in
-        let chunks = chunkify count |> List.map ~f:(fun n -> Instr (Instruction.Sub n)) in
+        let chunks =
+          chunkify count |> List.map ~f:(fun n -> Instr (Instruction.SubN n))
+        in
         let acc = List.fold chunks ~init:acc ~f:(fun acc i -> i :: acc) in
         parse next_pos acc
       | '>' ->
         let count, next_pos = count_consecutive pos '>' 0 in
         let chunks =
-          chunkify count |> List.map ~f:(fun n -> Instr (Instruction.Move n))
+          chunkify count |> List.map ~f:(fun n -> Instr (Instruction.MoveNR n))
         in
         let acc = List.fold chunks ~init:acc ~f:(fun acc i -> i :: acc) in
         parse next_pos acc
       | '<' ->
         let count, next_pos = count_consecutive pos '<' 0 in
         let chunks =
-          chunkify count |> List.map ~f:(fun n -> Instr (Instruction.Move (-n)))
+          chunkify count |> List.map ~f:(fun n -> Instr (Instruction.MoveNL n))
         in
         let acc = List.fold chunks ~init:acc ~f:(fun acc i -> i :: acc) in
         parse next_pos acc
@@ -91,14 +95,14 @@ let resolve_jumps instructions =
 let optimize_instructions instructions =
   let rec optimize acc = function
     | [] -> List.rev acc
-    | Instruction.Add 1 :: rest -> optimize (Instruction.Add1 :: acc) rest
-    | Instruction.Sub 1 :: rest -> optimize (Instruction.Sub1 :: acc) rest
-    | Instruction.Move 1 :: rest -> optimize (Instruction.Move1R :: acc) rest
-    | Instruction.Move -1 :: rest -> optimize (Instruction.Move1L :: acc) rest
-    | Instruction.Add n :: Instruction.Sub m :: rest when n = m ->
+    | Instruction.AddN 1 :: rest -> optimize (Instruction.Add1 :: acc) rest
+    | Instruction.SubN 1 :: rest -> optimize (Instruction.Sub1 :: acc) rest
+    | Instruction.MoveNR 1 :: rest -> optimize (Instruction.Move1R :: acc) rest
+    | Instruction.MoveNL 1 :: rest -> optimize (Instruction.Move1L :: acc) rest
+    | Instruction.AddN n :: Instruction.SubN m :: rest when n = m ->
       (* +n followed by -n cancels out *)
       optimize acc rest
-    | Instruction.Sub n :: Instruction.Add m :: rest when n = m ->
+    | Instruction.SubN n :: Instruction.AddN m :: rest when n = m ->
       (* -n followed by +n cancels out *)
       optimize acc rest
     | instr :: rest -> optimize (instr :: acc) rest
