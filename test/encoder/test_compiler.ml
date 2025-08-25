@@ -34,6 +34,24 @@ let test_counts () =
     [ Instr (Add 3); Instr (Sub 2); Instr (Move 3); Instr (Move (-3)) ]
 ;;
 
+let test_counts_capped () =
+  let make s n = String.make n s in
+  (* 300 '+' should be split into 255 + 45 *)
+  expect_parse "plus capped to 255" (make '+' 300) [ Instr (Add 255); Instr (Add 45) ];
+  (* 300 '-' should be split into 255 + 45 *)
+  expect_parse "minus capped to 255" (make '-' 300) [ Instr (Sub 255); Instr (Sub 45) ];
+  (* 300 '>' should be split into 255 + 45 *)
+  expect_parse
+    "move right capped to 255"
+    (make '>' 300)
+    [ Instr (Move 255); Instr (Move 45) ];
+  (* 300 '<' should be split into -255 + -45 preserving sign *)
+  expect_parse
+    "move left capped to 255"
+    (make '<' 300)
+    [ Instr (Move (-255)); Instr (Move (-45)) ]
+;;
+
 let test_loops () =
   expect_parse "empty loop" "[]" [ OpenLoop; CloseLoop ];
   expect_parse "nested loops" "[[]]" [ OpenLoop; OpenLoop; CloseLoop; CloseLoop ]
@@ -89,6 +107,7 @@ let () =
     [ ( "parse_sequence"
       , [ test_case "basic" `Quick test_basic
         ; test_case "counts" `Quick test_counts
+        ; test_case "counts capped" `Quick test_counts_capped
         ; test_case "loops" `Quick test_loops
         ; test_case "ignores" `Quick test_ignores
         ] )
