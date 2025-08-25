@@ -27,47 +27,47 @@ let int32_bytes_le i32 =
 ;;
 
 let test_add () =
-  expect_ok "add 5" (Add 5) [ 0x01; 0x05 ];
-  expect_ok "add 255" (Add 255) [ 0x01; 0xFF ];
-  expect_error "add -1" (Add (-1));
-  expect_error "add 256" (Add 256)
+  expect_ok "add 5" (AddN 5) [ 0x01; 0x05 ];
+  expect_ok "add 255" (AddN 255) [ 0x01; 0xFF ];
+  expect_error "add -1" (AddN (-1));
+  expect_error "add 256" (AddN 256)
 ;;
 
 let test_sub () =
-  expect_ok "sub 7" (Sub 7) [ 0x02; 0x07 ];
-  expect_ok "sub 255" (Sub 255) [ 0x02; 0xFF ];
-  expect_error "sub -1" (Sub (-1));
-  expect_error "sub 256" (Sub 256)
+  expect_ok "sub 7" (SubN 7) [ 0x02; 0x07 ];
+  expect_ok "sub 255" (SubN 255) [ 0x02; 0xFF ];
+  expect_error "sub -1" (SubN (-1));
+  expect_error "sub 256" (SubN 256)
 ;;
 
 let test_move () =
-  expect_ok "move 3" (Move 3) [ 0x03; 0x03 ];
-  expect_ok "move 255" (Move 255) [ 0x03; 0xFF ];
-  expect_error "move -1" (Move (-1));
-  expect_error "move 256" (Move 256)
+  expect_ok "move 3" (MoveNR 3) [ 0x03; 0x03 ];
+  expect_ok "move 255" (MoveNR 255) [ 0x03; 0xFF ];
+  expect_error "move -1" (MoveNL (-1));
+  expect_error "move 256" (MoveNR 256)
 ;;
 
 let test_jz () =
-  expect_ok "jz 0" (Jz 0) (0x04 :: int32_bytes_le Int32.zero);
-  expect_ok "jz 1" (Jz 1) (0x04 :: int32_bytes_le Int32.one);
-  expect_ok "jz -1" (Jz (-1)) (0x04 :: int32_bytes_le Int32.minus_one)
+  expect_ok "jz 0" (Jz 0) (0x05 :: int32_bytes_le Int32.zero);
+  expect_ok "jz 1" (Jz 1) (0x05 :: int32_bytes_le Int32.one);
+  expect_ok "jz -1" (Jz (-1)) (0x05 :: int32_bytes_le Int32.minus_one)
 ;;
 
 let test_jnz () =
-  expect_ok "jnz 42" (Jnz 42) (0x05 :: int32_bytes_le (Int32.of_int 42));
-  expect_ok "jnz -42" (Jnz (-42)) (0x05 :: int32_bytes_le (Int32.of_int (-42)))
+  expect_ok "jnz 42" (Jnz 42) (0x06 :: int32_bytes_le (Int32.of_int 42));
+  expect_ok "jnz -42" (Jnz (-42)) (0x06 :: int32_bytes_le (Int32.of_int (-42)))
 ;;
 
 let test_noarg () =
-  expect_ok "in" In [ 0x06 ];
-  expect_ok "out" Out [ 0x07 ];
-  expect_ok "call" Call [ 0x08 ];
-  expect_ok "setzero" SetZero [ 0x09 ];
-  expect_ok "copy" Copy [ 0x0A ];
-  expect_ok "add1" Add1 [ 0x0B ];
-  expect_ok "sub1" Sub1 [ 0x0C ];
-  expect_ok "move1r" Move1R [ 0x0D ];
-  expect_ok "move1l" Move1L [ 0x0E ]
+  expect_ok "in" In [ 0x07 ];
+  expect_ok "out" Out [ 0x08 ];
+  expect_ok "call" Call [ 0x09 ];
+  expect_ok "setzero" SetZero [ 0x0A ];
+  expect_ok "copy" Copy [ 0x0B ];
+  expect_ok "add1" Add1 [ 0x0C ];
+  expect_ok "sub1" Sub1 [ 0x0D ];
+  expect_ok "move1r" Move1R [ 0x0E ];
+  expect_ok "move1l" Move1L [ 0x0F ]
 ;;
 
 let () =
