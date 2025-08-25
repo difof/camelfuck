@@ -100,6 +100,18 @@ let test_resolve_unmatched_open () =
     (fun () -> resolve_jumps [ OpenLoop ] |> ignore)
 ;;
 
+(* structural pattern optimization tests *)
+let expect_pattern name source expected =
+  let actual = parse_sequence source |> pattern_optimize in
+  let expected_s = List.map show_intermediate expected in
+  let actual_s = List.map show_intermediate actual in
+  Alcotest.(check (list string)) name expected_s actual_s
+;;
+
+let test_pattern_setzero () = expect_pattern "setzero" "[-]" [ Instr SetZero ]
+let test_pattern_copy () = expect_pattern "copy" "[>+<-]" [ Instr Copy ]
+let test_pattern_call () = expect_pattern "call" "[[[]]]" [ Instr Call ]
+
 let () =
   let open Alcotest in
   run
@@ -118,6 +130,11 @@ let () =
         ; test_case "mixed" `Quick test_resolve_mixed
         ; test_case "unmatched close" `Quick test_resolve_unmatched_close
         ; test_case "unmatched open" `Quick test_resolve_unmatched_open
+        ] )
+    ; ( "pattern_optimize"
+      , [ test_case "setzero" `Quick test_pattern_setzero
+        ; test_case "copy" `Quick test_pattern_copy
+        ; test_case "call" `Quick test_pattern_call
         ] )
     ]
 ;;
