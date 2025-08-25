@@ -5,37 +5,37 @@ type intermediate_instr =
   | OpenLoop
   | CloseLoop
 
-let rec parse_sequence source pos acc =
-  if pos >= String.length source
-  then List.rev acc
-  else (
-    match source.[pos] with
-    | '+' ->
-      let count, next_pos = count_consecutive source pos '+' in
-      parse_sequence source next_pos (Instr (Instruction.Add count) :: acc)
-    | '-' ->
-      let count, next_pos = count_consecutive source pos '-' in
-      parse_sequence source next_pos (Instr (Instruction.Sub count) :: acc)
-    | '>' ->
-      let count, next_pos = count_consecutive source pos '>' in
-      parse_sequence source next_pos (Instr (Instruction.Move count) :: acc)
-    | '<' ->
-      let count, next_pos = count_consecutive source pos '<' in
-      parse_sequence source next_pos (Instr (Instruction.Move (-count)) :: acc)
-    | '.' -> parse_sequence source (pos + 1) (Instr Instruction.Out :: acc)
-    | ',' -> parse_sequence source (pos + 1) (Instr Instruction.In :: acc)
-    | '[' -> parse_sequence source (pos + 1) (OpenLoop :: acc)
-    | ']' -> parse_sequence source (pos + 1) (CloseLoop :: acc)
-    | _ -> parse_sequence source (pos + 1) acc)
-
-(* count consecutive identical characters *)
-and count_consecutive source start_pos target_char =
-  let rec count pos acc =
+let parse_sequence source =
+  (* count consecutive identical characters *)
+  let rec count_consecutive pos target_char acc =
     if pos >= String.length source || not (Char.equal source.[pos] target_char)
     then acc, pos
-    else count (pos + 1) (acc + 1)
+    else count_consecutive (pos + 1) target_char (acc + 1)
   in
-  count start_pos 0
+  let rec parse pos acc =
+    if pos >= String.length source
+    then List.rev acc
+    else (
+      match source.[pos] with
+      | '+' ->
+        let count, next_pos = count_consecutive pos '+' 0 in
+        parse next_pos (Instr (Instruction.Add count) :: acc)
+      | '-' ->
+        let count, next_pos = count_consecutive pos '-' 0 in
+        parse next_pos (Instr (Instruction.Sub count) :: acc)
+      | '>' ->
+        let count, next_pos = count_consecutive pos '>' 0 in
+        parse next_pos (Instr (Instruction.Move count) :: acc)
+      | '<' ->
+        let count, next_pos = count_consecutive pos '<' 0 in
+        parse next_pos (Instr (Instruction.Move (-count)) :: acc)
+      | '.' -> parse (pos + 1) (Instr Instruction.Out :: acc)
+      | ',' -> parse (pos + 1) (Instr Instruction.In :: acc)
+      | '[' -> parse (pos + 1) (OpenLoop :: acc)
+      | ']' -> parse (pos + 1) (CloseLoop :: acc)
+      | _ -> parse (pos + 1) acc)
+  in
+  parse 0 []
 ;;
 
 let resolve_jumps instructions =
@@ -138,7 +138,8 @@ let combine_instruction_bytes instr_bytes_list =
 ;;
 
 let compile source =
-  parse_sequence source 0 []
+  source
+  |> parse_sequence
   |> resolve_jumps
   |> optimize_instructions
   |> pattern_optimize
