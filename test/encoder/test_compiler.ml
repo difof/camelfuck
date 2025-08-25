@@ -18,10 +18,10 @@ let test_basic () =
   expect_parse
     "basic tokens"
     "+-<>.,"
-    [ Instr (Add 1)
-    ; Instr (Sub 1)
-    ; Instr (Move (-1))
-    ; Instr (Move 1)
+    [ Instr (AddN 1)
+    ; Instr (SubN 1)
+    ; Instr (MoveNL 1)
+    ; Instr (MoveNR 1)
     ; Instr Out
     ; Instr In
     ]
@@ -31,25 +31,25 @@ let test_counts () =
   expect_parse
     "counted runs"
     "+++-->>><<<"
-    [ Instr (Add 3); Instr (Sub 2); Instr (Move 3); Instr (Move (-3)) ]
+    [ Instr (AddN 3); Instr (SubN 2); Instr (MoveNR 3); Instr (MoveNL 3) ]
 ;;
 
 let test_counts_capped () =
   let make s n = String.make n s in
   (* 300 '+' should be split into 255 + 45 *)
-  expect_parse "plus capped to 255" (make '+' 300) [ Instr (Add 255); Instr (Add 45) ];
+  expect_parse "plus capped to 255" (make '+' 300) [ Instr (AddN 255); Instr (AddN 45) ];
   (* 300 '-' should be split into 255 + 45 *)
-  expect_parse "minus capped to 255" (make '-' 300) [ Instr (Sub 255); Instr (Sub 45) ];
+  expect_parse "minus capped to 255" (make '-' 300) [ Instr (SubN 255); Instr (SubN 45) ];
   (* 300 '>' should be split into 255 + 45 *)
   expect_parse
     "move right capped to 255"
     (make '>' 300)
-    [ Instr (Move 255); Instr (Move 45) ];
+    [ Instr (MoveNR 255); Instr (MoveNR 45) ];
   (* 300 '<' should be split into -255 + -45 preserving sign *)
   expect_parse
     "move left capped to 255"
     (make '<' 300)
-    [ Instr (Move (-255)); Instr (Move (-45)) ]
+    [ Instr (MoveNL 255); Instr (MoveNL 45) ]
 ;;
 
 let test_loops () =
@@ -57,7 +57,7 @@ let test_loops () =
   expect_parse "nested loops" "[[]]" [ OpenLoop; OpenLoop; CloseLoop; CloseLoop ]
 ;;
 
-let test_ignores () = expect_parse "ignores others" "a b\nc\t+ " [ Instr (Add 1) ]
+let test_ignores () = expect_parse "ignores others" "a b\nc\t+ " [ Instr (AddN 1) ]
 
 (* resolve_jumps tests *)
 let show_instr t = Format.asprintf "%a" pp_t t
@@ -74,7 +74,7 @@ let expect_resolve name source expected =
 let test_resolve_empty () = expect_resolve "empty loop" "[]" [ Jz 1; Jnz (-1) ]
 
 let test_resolve_with_body () =
-  expect_resolve "loop with body" "[+-]" [ Jz 3; Add 1; Sub 1; Jnz (-3) ]
+  expect_resolve "loop with body" "[+-]" [ Jz 3; AddN 1; SubN 1; Jnz (-3) ]
 ;;
 
 let test_resolve_nested () =
@@ -85,7 +85,7 @@ let test_resolve_mixed () =
   expect_resolve
     "mixed with body around"
     "+[>+<-]-"
-    [ Add 1; Jz 5; Move 1; Add 1; Move (-1); Sub 1; Jnz (-5); Sub 1 ]
+    [ AddN 1; Jz 5; MoveNR 1; AddN 1; MoveNL 1; SubN 1; Jnz (-5); SubN 1 ]
 ;;
 
 let test_resolve_unmatched_close () =
