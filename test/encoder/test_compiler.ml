@@ -62,13 +62,28 @@ let test_ignores () = expect_parse "ignores others" "a b\nc\t+ " [ Instr (AddN 1
 (* resolve_jumps tests *)
 let show_instr t = Format.asprintf "%a" pp_t t
 
+let show_error = function
+  | UnmatchedClosingBracket -> "UnmatchedClosingBracket"
+  | UnmatchedOpeningBracket -> "UnmatchedOpeningBracket"
+  | EncodingError _ -> "EncodingError"
+;;
+
 let expect_resolve name source expected =
   let inter = parse_sequence source in
-  let actual = resolve_jumps inter in
-  Alcotest.(check (list string))
-    name
-    (List.map show_instr expected)
-    (List.map show_instr actual)
+  match resolve_jumps inter with
+  | Ok actual ->
+    Alcotest.(check (list string))
+      name
+      (List.map show_instr expected)
+      (List.map show_instr actual)
+  | Error err -> Alcotest.failf "expected Ok, got Error: %s" (show_error err)
+;;
+
+let expect_resolve_error name source expected_err =
+  let inter = parse_sequence source in
+  match resolve_jumps inter with
+  | Ok _ -> Alcotest.failf "%s: expected Error, got Ok" name
+  | Error err -> Alcotest.(check string) name (show_error expected_err) (show_error err)
 ;;
 
 let test_resolve_empty () = expect_resolve "empty loop" "[]" [ Jz 1; Jnz (-1) ]
@@ -89,15 +104,11 @@ let test_resolve_mixed () =
 ;;
 
 let test_resolve_unmatched_close () =
-  Alcotest.check_raises "unmatched close" (Failure "Unmatched closing bracket") (fun () ->
-    resolve_jumps [ CloseLoop ] |> ignore)
+  expect_resolve_error "unmatched close" "]" UnmatchedClosingBracket
 ;;
 
 let test_resolve_unmatched_open () =
-  Alcotest.check_raises
-    "unmatched open"
-    (Failure "Unmatched opening bracket(s)")
-    (fun () -> resolve_jumps [ OpenLoop ] |> ignore)
+  expect_resolve_error "unmatched open" "[" UnmatchedOpeningBracket
 ;;
 
 (* structural pattern optimization tests *)
