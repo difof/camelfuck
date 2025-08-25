@@ -3,7 +3,7 @@ type intermediate_instr =
   | OpenLoop
   | CloseLoop
 
-val parse_sequence : string -> int -> intermediate_instr list -> intermediate_instr list
+val parse_sequence : string -> intermediate_instr list
 val resolve_jumps : intermediate_instr list -> Instruction.t list
 val optimize_instructions : Instruction.t list -> Instruction.t list
 val pattern_optimize : Instruction.t list -> Instruction.t list
