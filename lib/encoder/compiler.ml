@@ -6,9 +6,17 @@ type intermediate_instr =
   | CloseLoop
 
 type error =
-  | UnmatchedClosingBracket
-  | UnmatchedOpeningBracket
+  | UnmatchedClosingBracket of int
+  | UnmatchedOpeningBracket of int
   | EncodingError of Instruction.error
+
+let pp_error fmt = function
+  | UnmatchedClosingBracket i ->
+    Format.fprintf fmt "Unmatched closing bracket ']' at instruction %d" i
+  | UnmatchedOpeningBracket i ->
+    Format.fprintf fmt "Unmatched opening bracket '[' at instruction %d" i
+  | EncodingError err -> Instruction.pp_error fmt err
+;;
 
 let parse_sequence source =
   (* count consecutive identical characters *)
@@ -122,11 +130,11 @@ let resolve_jumps instructions =
             Hashtbl.set jt ~key:hd ~data:i;
             Hashtbl.set jt ~key:i ~data:hd;
             Ok rest
-          | [] -> Error UnmatchedClosingBracket)
+          | [] -> Error (UnmatchedClosingBracket i))
        | _ -> Ok stack)
    with
    | Ok [] -> Ok jt
-   | Ok (_ :: _) -> Error UnmatchedOpeningBracket
+   | Ok (hd :: _) -> Error (UnmatchedOpeningBracket hd)
    | Error _ as err -> err)
   >>| fun jt ->
   (* map jump table to Instruction.t *)

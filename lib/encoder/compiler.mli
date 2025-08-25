@@ -4,10 +4,11 @@ type intermediate_instr =
   | CloseLoop
 
 type error =
-  | UnmatchedClosingBracket
-  | UnmatchedOpeningBracket
+  | UnmatchedClosingBracket of int
+  | UnmatchedOpeningBracket of int
   | EncodingError of Instruction.error
 
+val pp_error : Format.formatter -> error -> unit
 val parse_sequence : string -> intermediate_instr list
 val optimize_instructions : intermediate_instr list -> intermediate_instr list
 val pattern_optimize : intermediate_instr list -> intermediate_instr list
