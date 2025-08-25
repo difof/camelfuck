@@ -12,6 +12,16 @@ let parse_sequence source =
     then acc, pos
     else count_consecutive (pos + 1) target_char (acc + 1)
   in
+  let chunkify count =
+    let rec loop remaining acc =
+      if remaining <= 0
+      then List.rev acc
+      else (
+        let take = Int.min 255 remaining in
+        loop (remaining - take) (take :: acc))
+    in
+    loop count []
+  in
   let rec parse pos acc =
     if pos >= String.length source
     then List.rev acc
@@ -19,16 +29,28 @@ let parse_sequence source =
       match source.[pos] with
       | '+' ->
         let count, next_pos = count_consecutive pos '+' 0 in
-        parse next_pos (Instr (Instruction.Add count) :: acc)
+        let chunks = chunkify count |> List.map ~f:(fun n -> Instr (Instruction.Add n)) in
+        let acc = List.fold chunks ~init:acc ~f:(fun acc i -> i :: acc) in
+        parse next_pos acc
       | '-' ->
         let count, next_pos = count_consecutive pos '-' 0 in
-        parse next_pos (Instr (Instruction.Sub count) :: acc)
+        let chunks = chunkify count |> List.map ~f:(fun n -> Instr (Instruction.Sub n)) in
+        let acc = List.fold chunks ~init:acc ~f:(fun acc i -> i :: acc) in
+        parse next_pos acc
       | '>' ->
         let count, next_pos = count_consecutive pos '>' 0 in
-        parse next_pos (Instr (Instruction.Move count) :: acc)
+        let chunks =
+          chunkify count |> List.map ~f:(fun n -> Instr (Instruction.Move n))
+        in
+        let acc = List.fold chunks ~init:acc ~f:(fun acc i -> i :: acc) in
+        parse next_pos acc
       | '<' ->
         let count, next_pos = count_consecutive pos '<' 0 in
-        parse next_pos (Instr (Instruction.Move (-count)) :: acc)
+        let chunks =
+          chunkify count |> List.map ~f:(fun n -> Instr (Instruction.Move (-n)))
+        in
+        let acc = List.fold chunks ~init:acc ~f:(fun acc i -> i :: acc) in
+        parse next_pos acc
       | '.' -> parse (pos + 1) (Instr Instruction.Out :: acc)
       | ',' -> parse (pos + 1) (Instr Instruction.In :: acc)
       | '[' -> parse (pos + 1) (OpenLoop :: acc)
