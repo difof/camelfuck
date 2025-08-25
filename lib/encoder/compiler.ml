@@ -22,46 +22,83 @@ let parse_sequence source =
     in
     loop count []
   in
-  let rec parse pos acc =
+  let accumulate_chunks acc pos target_char instr =
+    let count, next_pos = count_consecutive pos target_char 0 in
+    let chunks = chunkify count |> List.map ~f:(fun n -> Instr (instr n)) in
+    List.fold chunks ~init:acc ~f:(fun acc i -> i :: acc), next_pos
+  in
+  let rec parse acc pos =
     if pos >= String.length source
     then List.rev acc
     else (
       match source.[pos] with
       | '+' ->
-        let count, next_pos = count_consecutive pos '+' 0 in
-        let chunks =
-          chunkify count |> List.map ~f:(fun n -> Instr (Instruction.AddN n))
-        in
-        let acc = List.fold chunks ~init:acc ~f:(fun acc i -> i :: acc) in
-        parse next_pos acc
+        let acc, next_pos = accumulate_chunks acc pos '+' (fun n -> Instruction.AddN n) in
+        parse acc next_pos
       | '-' ->
-        let count, next_pos = count_consecutive pos '-' 0 in
-        let chunks =
-          chunkify count |> List.map ~f:(fun n -> Instr (Instruction.SubN n))
-        in
-        let acc = List.fold chunks ~init:acc ~f:(fun acc i -> i :: acc) in
-        parse next_pos acc
+        let acc, next_pos = accumulate_chunks acc pos '-' (fun n -> Instruction.SubN n) in
+        parse acc next_pos
       | '>' ->
-        let count, next_pos = count_consecutive pos '>' 0 in
-        let chunks =
-          chunkify count |> List.map ~f:(fun n -> Instr (Instruction.MoveNR n))
+        let acc, next_pos =
+          accumulate_chunks acc pos '>' (fun n -> Instruction.MoveNR n)
         in
-        let acc = List.fold chunks ~init:acc ~f:(fun acc i -> i :: acc) in
-        parse next_pos acc
+        parse acc next_pos
       | '<' ->
-        let count, next_pos = count_consecutive pos '<' 0 in
-        let chunks =
-          chunkify count |> List.map ~f:(fun n -> Instr (Instruction.MoveNL n))
+        let acc, next_pos =
+          accumulate_chunks acc pos '<' (fun n -> Instruction.MoveNL n)
         in
-        let acc = List.fold chunks ~init:acc ~f:(fun acc i -> i :: acc) in
-        parse next_pos acc
-      | '.' -> parse (pos + 1) (Instr Instruction.Out :: acc)
-      | ',' -> parse (pos + 1) (Instr Instruction.In :: acc)
-      | '[' -> parse (pos + 1) (OpenLoop :: acc)
-      | ']' -> parse (pos + 1) (CloseLoop :: acc)
-      | _ -> parse (pos + 1) acc)
+        parse acc next_pos
+      | '.' -> parse (Instr Instruction.Out :: acc) (pos + 1)
+      | ',' -> parse (Instr Instruction.In :: acc) (pos + 1)
+      | '[' -> parse (OpenLoop :: acc) (pos + 1)
+      | ']' -> parse (CloseLoop :: acc) (pos + 1)
+      | _ -> parse acc (pos + 1))
   in
-  parse 0 []
+  parse [] 0
+;;
+
+(* apply peephole/micro optimizations on intermediate tokens (preserving loops) *)
+let optimize_instructions instructions =
+  let rec optimize acc = function
+    | [] -> List.rev acc
+    | Instr (Instruction.AddN 1) :: rest -> optimize (Instr Instruction.Add1 :: acc) rest
+    | Instr (Instruction.SubN 1) :: rest -> optimize (Instr Instruction.Sub1 :: acc) rest
+    | Instr (Instruction.MoveNR 1) :: rest ->
+      optimize (Instr Instruction.Move1R :: acc) rest
+    | Instr (Instruction.MoveNL 1) :: rest ->
+      optimize (Instr Instruction.Move1L :: acc) rest
+    | Instr (Instruction.AddN n) :: Instr (Instruction.SubN m) :: rest when n = m ->
+      (* +n followed by -n cancels out *)
+      optimize acc rest
+    | Instr (Instruction.SubN n) :: Instr (Instruction.AddN m) :: rest when n = m ->
+      (* -n followed by +n cancels out *)
+      optimize acc rest
+    | instr :: rest -> optimize (instr :: acc) rest
+  in
+  optimize [] instructions
+;;
+
+(* detect common patterns structurally on loops and replace with specialized instructions *)
+let pattern_optimize instructions =
+  let rec optimize acc = function
+    | [] -> List.rev acc
+    (* optimized [-] -> setzero *)
+    | OpenLoop :: Instr (Instruction.SubN 1) :: CloseLoop :: rest ->
+      optimize (Instr Instruction.SetZero :: acc) rest
+    (* optimized [>+<-] -> copy *)
+    | OpenLoop
+      :: Instr (Instruction.MoveNR 1)
+      :: Instr (Instruction.AddN 1)
+      :: Instr (Instruction.MoveNL 1)
+      :: Instr (Instruction.SubN 1)
+      :: CloseLoop
+      :: rest -> optimize (Instr Instruction.Copy :: acc) rest
+    (* [[[]]] pattern: runtime CALL extension *)
+    | OpenLoop :: OpenLoop :: OpenLoop :: CloseLoop :: CloseLoop :: CloseLoop :: rest ->
+      optimize (Instr Instruction.Call :: acc) rest
+    | instr :: rest -> optimize (instr :: acc) rest
+  in
+  optimize [] instructions
 ;;
 
 let resolve_jumps instructions =
@@ -91,55 +128,6 @@ let resolve_jumps instructions =
     | Instr real_instr -> real_instr)
 ;;
 
-(* apply peephole optimizations *)
-let optimize_instructions instructions =
-  let rec optimize acc = function
-    | [] -> List.rev acc
-    | Instruction.AddN 1 :: rest -> optimize (Instruction.Add1 :: acc) rest
-    | Instruction.SubN 1 :: rest -> optimize (Instruction.Sub1 :: acc) rest
-    | Instruction.MoveNR 1 :: rest -> optimize (Instruction.Move1R :: acc) rest
-    | Instruction.MoveNL 1 :: rest -> optimize (Instruction.Move1L :: acc) rest
-    | Instruction.AddN n :: Instruction.SubN m :: rest when n = m ->
-      (* +n followed by -n cancels out *)
-      optimize acc rest
-    | Instruction.SubN n :: Instruction.AddN m :: rest when n = m ->
-      (* -n followed by +n cancels out *)
-      optimize acc rest
-    | instr :: rest -> optimize (instr :: acc) rest
-  in
-  optimize [] instructions
-;;
-
-(* detect common patterns and replace with specialized instructions *)
-let pattern_optimize instructions =
-  let rec optimize acc = function
-    | [] -> List.rev acc
-    | Instruction.Jz 2 :: Instruction.Sub1 :: Instruction.Jnz -2 :: rest ->
-      (* optimized [-] *)
-      optimize (Instruction.SetZero :: acc) rest
-    | Instruction.Jz 5
-      :: Instruction.Move1R
-      :: Instruction.Add1
-      :: Instruction.Move1L
-      :: Instruction.Sub1
-      :: Instruction.Jnz -5
-      :: rest ->
-      (* optimized [>+<-] *)
-      optimize (Instruction.Copy :: acc) rest
-    | Instruction.Jz 5
-      :: Instruction.Jz 3
-      :: Instruction.Jz 1
-      :: Instruction.Jnz -1
-      :: Instruction.Jnz -3
-      :: Instruction.Jnz -5
-      :: rest ->
-      (* [[[]]] pattern: runtime CALL extension *)
-      optimize (Instruction.Call :: acc) rest
-    | instr :: rest -> optimize (instr :: acc) rest
-  in
-  optimize [] instructions
-;;
-
 let encode_to_bytes instructions =
   List.fold instructions ~init:[] ~f:(fun acc instr ->
     match Instruction.encode instr with
@@ -166,9 +154,9 @@ let combine_instruction_bytes instr_bytes_list =
 let compile source =
   source
   |> parse_sequence
-  |> resolve_jumps
-  |> optimize_instructions
   |> pattern_optimize
+  |> optimize_instructions
+  |> resolve_jumps
   |> encode_to_bytes
   |> combine_instruction_bytes
 ;;
