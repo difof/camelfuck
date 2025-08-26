@@ -5,6 +5,8 @@ type intermediate_instr =
   | OpenLoop
   | CloseLoop
 
+type intermediate_instr_w_offset = IntInstrWOffset of intermediate_instr * int
+
 type error =
   | UnmatchedClosingBracket of int
   | UnmatchedOpeningBracket of int
