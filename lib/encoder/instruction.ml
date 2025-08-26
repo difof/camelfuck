@@ -42,6 +42,12 @@ let pp_error fmt = function
     Format.fprintf fmt "Operand %d out of bounds [%d-%d] for opcode %a" v min max pp_t t
 ;;
 
+let size = function
+  | AddN _ | SubN _ | MoveNR _ | MoveNL _ -> 2
+  | Jz _ | Jnz _ -> 5
+  | _ -> 1
+;;
+
 let to_char t =
   let chr = Char.unsafe_chr in
   match t with
@@ -73,14 +79,14 @@ let encode t =
   let op_with_byte_arg t v =
     if v < 0 || v > 255
     then Error (OperandOutOfBounds (t, v, 0, 255))
-    else Ok (op_with_arg t 2 Bytes.set_uint8 v)
+    else Ok (op_with_arg t (size t) Bytes.set_uint8 v)
   in
   let op_with_int32_arg t v =
     let min_v = Int32.min_int |> Int32.to_int in
     let max_v = Int32.max_int |> Int32.to_int in
     if v < min_v || v > max_v
     then Error (OperandOutOfBounds (t, v, min_v, max_v))
-    else Ok (op_with_arg t 5 Bytes.set_int32_le @@ Int32.of_int v)
+    else Ok (op_with_arg t (size t) Bytes.set_int32_le @@ Int32.of_int v)
   in
   match t with
   | AddN n -> op_with_byte_arg t n
