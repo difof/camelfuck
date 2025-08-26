@@ -20,6 +20,17 @@ let pp_error fmt = function
   | EncodingError err -> Instruction.pp_error fmt err
 ;;
 
+let pp_intermediate_instr fmt = function
+  | Instr i -> Format.fprintf fmt "Instr(%a)" Instruction.pp_t i
+  | OpenLoop -> Format.fprintf fmt "OpenLoop"
+  | CloseLoop -> Format.fprintf fmt "CloseLoop"
+;;
+
+let pp_intermediate_instr_w_offset fmt = function
+  | IntInstrWOffset (instr, off) ->
+    Format.fprintf fmt "%a@%d" pp_intermediate_instr instr off
+;;
+
 let parse_sequence source =
   (* count consecutive identical characters *)
   let rec count_consecutive pos target_char acc =
@@ -117,7 +128,6 @@ let pattern_optimize instructions =
 ;;
 
 let map_offsets instructions =
-  (* accumulate instructions and last offset *)
   instructions
   |> List.fold ~init:([], 0) ~f:(fun (prev_instructions, offset) instr ->
     let size =
@@ -133,9 +143,8 @@ let map_offsets instructions =
 let resolve_jumps instructions_w_offset =
   let open Result in
   let open Hashtbl in
-  let fill_jump_table jt =
+  let fill_jump_table jump_table =
     match
-      (* build jump table via stack *)
       List.fold
         instructions_w_offset
         ~init:(Ok [])
@@ -147,13 +156,13 @@ let resolve_jumps instructions_w_offset =
           | CloseLoop ->
             (match stack with
              | hd :: rest ->
-               set jt ~key:hd ~data:offset;
-               set jt ~key:offset ~data:hd;
+               set jump_table ~key:hd ~data:offset;
+               set jump_table ~key:offset ~data:hd;
                Ok rest
              | [] -> Error (UnmatchedClosingBracket offset))
           | _ -> Ok stack)
     with
-    | Ok [] -> Ok jt
+    | Ok [] -> Ok jump_table
     | Ok (hd :: _) -> Error (UnmatchedOpeningBracket hd)
     | Error _ as err -> err
   in

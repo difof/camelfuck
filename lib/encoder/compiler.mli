@@ -11,6 +11,13 @@ type error =
   | EncodingError of Instruction.error
 
 val pp_error : Format.formatter -> error -> unit
+val pp_intermediate_instr : Format.formatter -> intermediate_instr -> unit
+
+val pp_intermediate_instr_w_offset
+  :  Format.formatter
+  -> intermediate_instr_w_offset
+  -> unit
+
 val parse_sequence : string -> intermediate_instr list
 val optimize_instructions : intermediate_instr list -> intermediate_instr list
 val pattern_optimize : intermediate_instr list -> intermediate_instr list
