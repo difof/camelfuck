@@ -7,3 +7,8 @@
  (name test_compiler)
  (libraries encoder alcotest)
  (modules test_compiler))
+
+(test
+ (name test_compile_program)
+ (libraries encoder alcotest)
+ (modules test_compile_program))
