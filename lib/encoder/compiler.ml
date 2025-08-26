@@ -203,6 +203,7 @@ let compile source =
   |> parse_sequence
   |> pattern_optimize
   |> optimize_instructions
+  |> map_offsets
   |> resolve_jumps
   >>= encode_to_bytes
   >>| combine_instruction_bytes
