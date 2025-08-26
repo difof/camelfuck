@@ -116,39 +116,60 @@ let pattern_optimize instructions =
   optimize [] instructions
 ;;
 
-let resolve_jumps instructions =
+let map_offsets instructions =
+  (* accumulate instructions and last offset *)
+  instructions
+  |> List.fold ~init:([], 0) ~f:(fun (prev_instructions, offset) instr ->
+    let size =
+      match instr with
+      | OpenLoop | CloseLoop -> 5
+      | Instr inner -> Instruction.size inner
+    in
+    IntInstrWOffset (instr, offset) :: prev_instructions, offset + size)
+  |> fst
+  |> List.rev
+;;
+
+let resolve_jumps instructions_w_offset =
   let open Result in
-  (let jt = Hashtbl.create (module Int) in
-   match
-     (* build jump table via stack *)
-     List.foldi instructions ~init:(Ok []) ~f:(fun i acc instr ->
-       acc
-       >>= fun stack ->
-       match instr with
-       | OpenLoop -> Ok (i :: stack)
-       | CloseLoop ->
-         (match stack with
-          | hd :: rest ->
-            Hashtbl.set jt ~key:hd ~data:i;
-            Hashtbl.set jt ~key:i ~data:hd;
-            Ok rest
-          | [] -> Error (UnmatchedClosingBracket i))
-       | _ -> Ok stack)
-   with
-   | Ok [] -> Ok jt
-   | Ok (hd :: _) -> Error (UnmatchedOpeningBracket hd)
-   | Error _ as err -> err)
-  >>| fun jt ->
-  (* map jump table to Instruction.t *)
-  List.mapi instructions ~f:(fun i instr ->
-    match instr with
-    | OpenLoop ->
-      let target = Hashtbl.find_exn jt i in
-      Instruction.Jz (target - i)
-    | CloseLoop ->
-      let target = Hashtbl.find_exn jt i in
-      Instruction.Jnz (target - i)
-    | Instr real_instr -> real_instr)
+  let open Hashtbl in
+  let fill_jump_table jt =
+    match
+      (* build jump table via stack *)
+      List.fold
+        instructions_w_offset
+        ~init:(Ok [])
+        ~f:(fun acc (IntInstrWOffset (instr, offset)) ->
+          acc
+          >>= fun stack ->
+          match instr with
+          | OpenLoop -> Ok (offset :: stack)
+          | CloseLoop ->
+            (match stack with
+             | hd :: rest ->
+               set jt ~key:hd ~data:offset;
+               set jt ~key:offset ~data:hd;
+               Ok rest
+             | [] -> Error (UnmatchedClosingBracket offset))
+          | _ -> Ok stack)
+    with
+    | Ok [] -> Ok jt
+    | Ok (hd :: _) -> Error (UnmatchedOpeningBracket hd)
+    | Error _ as err -> err
+  in
+  let map_intermediate_to_instr jump_table =
+    instructions_w_offset
+    |> List.map ~f:(fun (IntInstrWOffset (instr, offset)) ->
+      match instr with
+      | OpenLoop ->
+        let target = find_exn jump_table offset in
+        Instruction.Jz (target - offset)
+      | CloseLoop ->
+        let target = find_exn jump_table offset in
+        Instruction.Jnz (target - offset)
+      | Instr real_instr -> real_instr)
+  in
+  create (module Int) |> fill_jump_table >>| map_intermediate_to_instr
 ;;
 
 let encode_to_bytes instructions =
