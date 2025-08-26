@@ -19,9 +19,9 @@ let test_basic () =
     "basic tokens"
     "+-<>.,"
     [ Instr (AddN 1)
-    ; Instr (SubN 1)
-    ; Instr (MoveNL 1)
-    ; Instr (MoveNR 1)
+    ; Instr (AddN (-1))
+    ; Instr (MoveN (-1))
+    ; Instr (MoveN 1)
     ; Instr Out
     ; Instr In
     ]
@@ -31,25 +31,31 @@ let test_counts () =
   expect_parse
     "counted runs"
     "+++-->>><<<"
-    [ Instr (AddN 3); Instr (SubN 2); Instr (MoveNR 3); Instr (MoveNL 3) ]
+    [ Instr (AddN 3); Instr (AddN (-2)); Instr (MoveN 3); Instr (MoveN (-3)) ]
 ;;
 
 let test_counts_capped () =
   let make s n = String.make n s in
-  (* 300 '+' should be split into 255 + 45 *)
-  expect_parse "plus capped to 255" (make '+' 300) [ Instr (AddN 255); Instr (AddN 45) ];
-  (* 300 '-' should be split into 255 + 45 *)
-  expect_parse "minus capped to 255" (make '-' 300) [ Instr (SubN 255); Instr (SubN 45) ];
-  (* 300 '>' should be split into 255 + 45 *)
+  (* 300 '+' should be split into 127 + 127 + 46 *)
   expect_parse
-    "move right capped to 255"
+    "plus capped to 127"
+    (make '+' 300)
+    [ Instr (AddN 127); Instr (AddN 127); Instr (AddN 46) ];
+  (* 300 '-' should be split into -127 + -127 + -46 preserving sign via AddN *)
+  expect_parse
+    "minus capped to 127"
+    (make '-' 300)
+    [ Instr (AddN (-127)); Instr (AddN (-127)); Instr (AddN (-46)) ];
+  (* 300 '>' should be split into 127 + 127 + 46 *)
+  expect_parse
+    "move right capped to 127"
     (make '>' 300)
-    [ Instr (MoveNR 255); Instr (MoveNR 45) ];
-  (* 300 '<' should be split into -255 + -45 preserving sign *)
+    [ Instr (MoveN 127); Instr (MoveN 127); Instr (MoveN 46) ];
+  (* 300 '<' should be split into -127 + -127 + -46 *)
   expect_parse
-    "move left capped to 255"
+    "move left capped to 127"
     (make '<' 300)
-    [ Instr (MoveNL 255); Instr (MoveNL 45) ]
+    [ Instr (MoveN (-127)); Instr (MoveN (-127)); Instr (MoveN (-46)) ]
 ;;
 
 let test_loops () =
@@ -90,12 +96,12 @@ let test_offsets_mixed () =
   (* "+[>+<-]-." -> offsets:
      addn(1)@0 (2 bytes)
      [@2 (5 bytes)
-     movenr(1)@7 (2 bytes)
+     moven(1)@7 (2 bytes)
      addn(1)@9 (2 bytes)
-     movenl(1)@11 (2 bytes)
-     subn(1)@13 (2 bytes)
+     moven(-1)@11 (2 bytes)
+     addn(-1)@13 (2 bytes)
      ]@15 (5 bytes)
-     subn(1)@20 (2 bytes)
+     addn(-1)@20 (2 bytes)
      out@22 (1 byte)
   *)
   expect_offsets
@@ -103,12 +109,12 @@ let test_offsets_mixed () =
     "+[>+<-]-."
     [ IntInstrWOffset (Instr (AddN 1), 0)
     ; IntInstrWOffset (OpenLoop, 2)
-    ; IntInstrWOffset (Instr (MoveNR 1), 7)
+    ; IntInstrWOffset (Instr (MoveN 1), 7)
     ; IntInstrWOffset (Instr (AddN 1), 9)
-    ; IntInstrWOffset (Instr (MoveNL 1), 11)
-    ; IntInstrWOffset (Instr (SubN 1), 13)
+    ; IntInstrWOffset (Instr (MoveN (-1)), 11)
+    ; IntInstrWOffset (Instr (AddN (-1)), 13)
     ; IntInstrWOffset (CloseLoop, 15)
-    ; IntInstrWOffset (Instr (SubN 1), 20)
+    ; IntInstrWOffset (Instr (AddN (-1)), 20)
     ; IntInstrWOffset (Instr Out, 22)
     ]
 ;;
@@ -134,7 +140,7 @@ let expect_resolve_error name source expected_err_s =
 let test_resolve_empty () = expect_resolve "empty loop" "[]" [ Jz 5; Jnz (-5) ]
 
 let test_resolve_with_body () =
-  expect_resolve "loop with body" "[+-]" [ Jz 9; AddN 1; SubN 1; Jnz (-9) ]
+  expect_resolve "loop with body" "[+-]" [ Jz 9; AddN 1; AddN (-1); Jnz (-9) ]
 ;;
 
 let test_resolve_nested () =
@@ -145,7 +151,7 @@ let test_resolve_mixed () =
   expect_resolve
     "mixed with body around"
     "+[>+<-]-"
-    [ AddN 1; Jz 13; MoveNR 1; AddN 1; MoveNL 1; SubN 1; Jnz (-13); SubN 1 ]
+    [ AddN 1; Jz 13; MoveN 1; AddN 1; MoveN (-1); AddN (-1); Jnz (-13); AddN (-1) ]
 ;;
 
 let test_resolve_unmatched_close () =
