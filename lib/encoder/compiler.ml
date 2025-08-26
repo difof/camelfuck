@@ -38,19 +38,16 @@ let parse_sequence source =
     then acc, pos
     else count_consecutive (pos + 1) target_char (acc + 1)
   in
-  let chunkify count =
-    let rec loop remaining acc =
-      if remaining <= 0
-      then List.rev acc
-      else (
-        let take = Int.min 255 remaining in
-        loop (remaining - take) (take :: acc))
-    in
-    loop count []
+  let rec chunkify remaining acc =
+    if remaining <= 0
+    then List.rev acc
+    else (
+      let take = Int.min 127 remaining in
+      chunkify (remaining - take) (take :: acc))
   in
   let accumulate_chunks acc pos target_char instr =
     let count, next_pos = count_consecutive pos target_char 0 in
-    let chunks = chunkify count |> List.map ~f:(fun n -> Instr (instr n)) in
+    let chunks = chunkify count [] |> List.map ~f:(fun n -> Instr (instr n)) in
     List.fold chunks ~init:acc ~f:(fun acc i -> i :: acc), next_pos
   in
   let rec parse acc pos =
@@ -62,16 +59,18 @@ let parse_sequence source =
         let acc, next_pos = accumulate_chunks acc pos '+' (fun n -> Instruction.AddN n) in
         parse acc next_pos
       | '-' ->
-        let acc, next_pos = accumulate_chunks acc pos '-' (fun n -> Instruction.SubN n) in
+        let acc, next_pos =
+          accumulate_chunks acc pos '-' (fun n -> Instruction.AddN (-n))
+        in
         parse acc next_pos
       | '>' ->
         let acc, next_pos =
-          accumulate_chunks acc pos '>' (fun n -> Instruction.MoveNR n)
+          accumulate_chunks acc pos '>' (fun n -> Instruction.MoveN n)
         in
         parse acc next_pos
       | '<' ->
         let acc, next_pos =
-          accumulate_chunks acc pos '<' (fun n -> Instruction.MoveNL n)
+          accumulate_chunks acc pos '<' (fun n -> Instruction.MoveN (-n))
         in
         parse acc next_pos
       | '.' -> parse (Instr Instruction.Out :: acc) (pos + 1)
@@ -88,16 +87,16 @@ let optimize_instructions instructions =
   let rec optimize acc = function
     | [] -> List.rev acc
     | Instr (Instruction.AddN 1) :: rest -> optimize (Instr Instruction.Add1 :: acc) rest
-    | Instr (Instruction.SubN 1) :: rest -> optimize (Instr Instruction.Sub1 :: acc) rest
-    | Instr (Instruction.MoveNR 1) :: rest ->
+    | Instr (Instruction.AddN -1) :: rest -> optimize (Instr Instruction.Sub1 :: acc) rest
+    | Instr (Instruction.MoveN 1) :: rest ->
       optimize (Instr Instruction.Move1R :: acc) rest
-    | Instr (Instruction.MoveNL 1) :: rest ->
+    | Instr (Instruction.MoveN -1) :: rest ->
       optimize (Instr Instruction.Move1L :: acc) rest
-    | Instr (Instruction.AddN n) :: Instr (Instruction.SubN m) :: rest when n = m ->
-      (* +n followed by -n cancels out *)
+    | Instr (Instruction.AddN n) :: Instr (Instruction.AddN m) :: rest when n + m = 0 ->
+      (* +n followed by -n cancels out (using signed AddN) *)
       optimize acc rest
-    | Instr (Instruction.SubN n) :: Instr (Instruction.AddN m) :: rest when n = m ->
-      (* -n followed by +n cancels out *)
+    | Instr (Instruction.MoveN n) :: Instr (Instruction.MoveN m) :: rest when n + m = 0 ->
+      (* right then left with equal magnitude cancels out *)
       optimize acc rest
     | instr :: rest -> optimize (instr :: acc) rest
   in
@@ -109,14 +108,14 @@ let pattern_optimize instructions =
   let rec optimize acc = function
     | [] -> List.rev acc
     (* optimized [-] -> setzero *)
-    | OpenLoop :: Instr (Instruction.SubN 1) :: CloseLoop :: rest ->
+    | OpenLoop :: Instr (Instruction.AddN -1) :: CloseLoop :: rest ->
       optimize (Instr Instruction.SetZero :: acc) rest
     (* optimized [>+<-] -> copy *)
     | OpenLoop
-      :: Instr (Instruction.MoveNR 1)
+      :: Instr (Instruction.MoveN 1)
       :: Instr (Instruction.AddN 1)
-      :: Instr (Instruction.MoveNL 1)
-      :: Instr (Instruction.SubN 1)
+      :: Instr (Instruction.MoveN -1)
+      :: Instr (Instruction.AddN -1)
       :: CloseLoop
       :: rest -> optimize (Instr Instruction.Copy :: acc) rest
     (* [[[]]] pattern: runtime CALL extension *)
