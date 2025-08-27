@@ -32,6 +32,7 @@ let pp_intermediate_instr_w_offset fmt = function
 ;;
 
 let parse_sequence source =
+  let open Instruction in
   (* count consecutive identical characters *)
   let rec count_consecutive pos target_char acc =
     if pos >= String.length source || not (Char.equal source.[pos] target_char)
@@ -56,25 +57,19 @@ let parse_sequence source =
     else (
       match source.[pos] with
       | '+' ->
-        let acc, next_pos = accumulate_chunks acc pos '+' (fun n -> Instruction.AddN n) in
+        let acc, next_pos = accumulate_chunks acc pos '+' (fun n -> AddN n) in
         parse acc next_pos
       | '-' ->
-        let acc, next_pos =
-          accumulate_chunks acc pos '-' (fun n -> Instruction.AddN (-n))
-        in
+        let acc, next_pos = accumulate_chunks acc pos '-' (fun n -> AddN (-n)) in
         parse acc next_pos
       | '>' ->
-        let acc, next_pos =
-          accumulate_chunks acc pos '>' (fun n -> Instruction.MoveN n)
-        in
+        let acc, next_pos = accumulate_chunks acc pos '>' (fun n -> MoveN n) in
         parse acc next_pos
       | '<' ->
-        let acc, next_pos =
-          accumulate_chunks acc pos '<' (fun n -> Instruction.MoveN (-n))
-        in
+        let acc, next_pos = accumulate_chunks acc pos '<' (fun n -> MoveN (-n)) in
         parse acc next_pos
-      | '.' -> parse (Instr Instruction.Out :: acc) (pos + 1)
-      | ',' -> parse (Instr Instruction.In :: acc) (pos + 1)
+      | '.' -> parse (Instr Out :: acc) (pos + 1)
+      | ',' -> parse (Instr In :: acc) (pos + 1)
       | '[' -> parse (OpenLoop :: acc) (pos + 1)
       | ']' -> parse (CloseLoop :: acc) (pos + 1)
       | _ -> parse acc (pos + 1))
@@ -84,43 +79,50 @@ let parse_sequence source =
 
 (* apply micro optimizations on intermediate tokens *)
 let optimize_instructions instructions =
+  let open Instruction in
   let rec optimize acc = function
     | [] -> List.rev acc
-    | Instr (Instruction.AddN 1) :: rest -> optimize (Instr Instruction.Add1 :: acc) rest
-    | Instr (Instruction.AddN -1) :: rest -> optimize (Instr Instruction.Sub1 :: acc) rest
-    | Instr (Instruction.MoveN 1) :: rest ->
-      optimize (Instr Instruction.Move1R :: acc) rest
-    | Instr (Instruction.MoveN -1) :: rest ->
-      optimize (Instr Instruction.Move1L :: acc) rest
-    | Instr (Instruction.AddN n) :: Instr (Instruction.AddN m) :: rest when n + m = 0 ->
+    | Instr (AddN 1) :: rest -> optimize (Instr Add1 :: acc) rest
+    | Instr (AddN -1) :: rest -> optimize (Instr Sub1 :: acc) rest
+    | Instr (MoveN 1) :: rest -> optimize (Instr Move1R :: acc) rest
+    | Instr (MoveN -1) :: rest -> optimize (Instr Move1L :: acc) rest
+    | Instr (AddN n) :: Instr (AddN m) :: rest when n + m = 0 ->
       (* +n followed by -n cancels out (using signed AddN) *)
       optimize acc rest
-    | Instr (Instruction.MoveN n) :: Instr (Instruction.MoveN m) :: rest when n + m = 0 ->
+    | Instr (MoveN n) :: Instr (MoveN m) :: rest when n + m = 0 ->
       (* right then left with equal magnitude cancels out *)
+      optimize acc rest
+    | Instr Move1L :: Instr Move1R :: rest | Instr Move1R :: Instr Move1L :: rest ->
+      (* right then left with equal magnitude cancels out, requires running again *)
+      optimize acc rest
+    | Instr Add1 :: Instr Sub1 :: rest | Instr Sub1 :: Instr Add1 :: rest ->
+      (* +n followed by -n cancels out, requires running again *)
       optimize acc rest
     | instr :: rest -> optimize (instr :: acc) rest
   in
-  optimize [] instructions
+  (* double optimize to cancel out no imm instructions *)
+  optimize [] instructions |> optimize []
 ;;
 
 (* detect common patterns structurally on loops and replace with specialized instructions *)
 let pattern_optimize instructions =
+  let open Instruction in
   let rec optimize acc = function
     | [] -> List.rev acc
     (* optimized [-] -> setzero *)
-    | OpenLoop :: Instr (Instruction.AddN -1) :: CloseLoop :: rest ->
-      optimize (Instr Instruction.SetZero :: acc) rest
+    | OpenLoop :: Instr (AddN -1) :: CloseLoop :: rest ->
+      optimize (Instr SetZero :: acc) rest
     (* optimized [>+<-] -> copy *)
     | OpenLoop
-      :: Instr (Instruction.MoveN 1)
-      :: Instr (Instruction.AddN 1)
-      :: Instr (Instruction.MoveN -1)
-      :: Instr (Instruction.AddN -1)
+      :: Instr (MoveN 1)
+      :: Instr (AddN 1)
+      :: Instr (MoveN -1)
+      :: Instr (AddN -1)
       :: CloseLoop
-      :: rest -> optimize (Instr Instruction.Copy :: acc) rest
+      :: rest -> optimize (Instr Copy :: acc) rest
     (* [[[]]] pattern: runtime CALL extension *)
     | OpenLoop :: OpenLoop :: OpenLoop :: CloseLoop :: CloseLoop :: CloseLoop :: rest ->
-      optimize (Instr Instruction.Call :: acc) rest
+      optimize (Instr Call :: acc) rest
     | instr :: rest -> optimize (instr :: acc) rest
   in
   optimize [] instructions
