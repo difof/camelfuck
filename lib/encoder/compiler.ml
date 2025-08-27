@@ -109,15 +109,15 @@ let pattern_optimize instructions =
   let open Instruction in
   let rec optimize acc = function
     | [] -> List.rev acc
-    (* optimized [-] -> setzero *)
-    | OpenLoop :: Instr (AddN -1) :: CloseLoop :: rest ->
-      optimize (Instr SetZero :: acc) rest
+    (* optimized [-] and [+] -> setzero *)
+    | OpenLoop :: Instr Add1 :: CloseLoop :: rest
+    | OpenLoop :: Instr Sub1 :: CloseLoop :: rest -> optimize (Instr SetZero :: acc) rest
     (* optimized [>+<-] -> copy *)
     | OpenLoop
-      :: Instr (MoveN 1)
-      :: Instr (AddN 1)
-      :: Instr (MoveN -1)
-      :: Instr (AddN -1)
+      :: Instr Move1R
+      :: Instr Add1
+      :: Instr Move1L
+      :: Instr Sub1
       :: CloseLoop
       :: rest -> optimize (Instr Copy :: acc) rest
     (* [[[]]] pattern: runtime CALL extension *)
