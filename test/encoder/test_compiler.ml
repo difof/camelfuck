@@ -41,21 +41,21 @@ let test_counts_capped () =
     "plus capped to 127"
     (make '+' 300)
     [ Instr (AddN 127); Instr (AddN 127); Instr (AddN 46) ];
-  (* 300 '-' should be split into -127 + -127 + -46 preserving sign via AddN *)
+  (* 300 '-' should be split into -128 + -128 + -44 preserving sign via AddN *)
   expect_parse
-    "minus capped to 127"
+    "minus capped to 128"
     (make '-' 300)
-    [ Instr (AddN (-127)); Instr (AddN (-127)); Instr (AddN (-46)) ];
+    [ Instr (AddN (-128)); Instr (AddN (-128)); Instr (AddN (-44)) ];
   (* 300 '>' should be split into 127 + 127 + 46 *)
   expect_parse
     "move right capped to 127"
     (make '>' 300)
     [ Instr (MoveN 127); Instr (MoveN 127); Instr (MoveN 46) ];
-  (* 300 '<' should be split into -127 + -127 + -46 *)
+  (* 300 '<' should be split into -128 + -128 + -44 *)
   expect_parse
-    "move left capped to 127"
+    "move left capped to 128"
     (make '<' 300)
-    [ Instr (MoveN (-127)); Instr (MoveN (-127)); Instr (MoveN (-46)) ]
+    [ Instr (MoveN (-128)); Instr (MoveN (-128)); Instr (MoveN (-44)) ]
 ;;
 
 let test_loops () =
