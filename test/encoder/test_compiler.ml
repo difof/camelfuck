@@ -137,21 +137,21 @@ let expect_resolve_error name source expected_err_s =
   | Error err -> Alcotest.(check string) name expected_err_s (show_error err)
 ;;
 
-let test_resolve_empty () = expect_resolve "empty loop" "[]" [ Jz 5; Jnz (-5) ]
+let test_resolve_empty () = expect_resolve "empty loop" "[]" [ Jz 10; Jnz 0 ]
 
 let test_resolve_with_body () =
-  expect_resolve "loop with body" "[+-]" [ Jz 9; AddN 1; AddN (-1); Jnz (-9) ]
+  expect_resolve "loop with body" "[+-]" [ Jz 14; AddN 1; AddN (-1); Jnz (-4) ]
 ;;
 
 let test_resolve_nested () =
-  expect_resolve "nested loops" "[[]]" [ Jz 15; Jz 5; Jnz (-5); Jnz (-15) ]
+  expect_resolve "nested loops" "[[]]" [ Jz 20; Jz 10; Jnz 0; Jnz (-10) ]
 ;;
 
 let test_resolve_mixed () =
   expect_resolve
     "mixed with body around"
     "+[>+<-]-"
-    [ AddN 1; Jz 13; MoveN 1; AddN 1; MoveN (-1); AddN (-1); Jnz (-13); AddN (-1) ]
+    [ AddN 1; Jz 18; MoveN 1; AddN 1; MoveN (-1); AddN (-1); Jnz (-8); AddN (-1) ]
 ;;
 
 let test_resolve_unmatched_close () =

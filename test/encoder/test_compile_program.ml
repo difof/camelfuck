@@ -27,7 +27,7 @@ let test_compile_helloworld () =
       [ 0x01
       ; 0x0B
       ; 0x03
-      ; 0x19
+      ; 0x1E
       ; 0x00
       ; 0x00
       ; 0x00
@@ -52,7 +52,7 @@ let test_compile_helloworld () =
       ; 0xFA
       ; 0x0B
       ; 0x04
-      ; 0xE7
+      ; 0xEC
       ; 0xFF
       ; 0xFF
       ; 0xFF
