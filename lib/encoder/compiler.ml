@@ -112,14 +112,14 @@ let pattern_optimize instructions =
     (* optimized [-] and [+] -> setzero *)
     | OpenLoop :: Instr Add1 :: CloseLoop :: rest
     | OpenLoop :: Instr Sub1 :: CloseLoop :: rest -> optimize (Instr SetZero :: acc) rest
-    (* optimized [>+<-] -> copy *)
+    (* optimized [>+<-] -> transferr *)
     | OpenLoop
       :: Instr Move1R
       :: Instr Add1
       :: Instr Move1L
       :: Instr Sub1
       :: CloseLoop
-      :: rest -> optimize (Instr Copy :: acc) rest
+      :: rest -> optimize (Instr TransferR :: acc) rest
     (* [[[]]] pattern: runtime CALL extension *)
     | OpenLoop :: OpenLoop :: OpenLoop :: CloseLoop :: CloseLoop :: CloseLoop :: rest ->
       optimize (Instr Call :: acc) rest

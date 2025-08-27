@@ -9,7 +9,7 @@ type t =
   | Out
   | Call
   | SetZero
-  | Copy
+  | TransferR
   | Add1
   | Sub1
   | Move1R
@@ -26,7 +26,7 @@ let pp_t fmt = function
   | Out -> Format.fprintf fmt "out"
   | Call -> Format.fprintf fmt "call"
   | SetZero -> Format.fprintf fmt "setzero"
-  | Copy -> Format.fprintf fmt "copy"
+  | TransferR -> Format.fprintf fmt "transferr"
   | Add1 -> Format.fprintf fmt "add1"
   | Sub1 -> Format.fprintf fmt "sub1"
   | Move1R -> Format.fprintf fmt "move1r"
@@ -55,7 +55,7 @@ let to_char t =
   | Out -> chr 0x06
   | Call -> chr 0x07
   | SetZero -> chr 0x08
-  | Copy -> chr 0x09
+  | TransferR -> chr 0x09
   | Add1 -> chr 0x0A
   | Sub1 -> chr 0x0B
   | Move1R -> chr 0x0C
