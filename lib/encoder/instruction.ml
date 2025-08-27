@@ -1,6 +1,7 @@
 open Stdlib
 
 type t =
+  | Halt
   | AddN of int
   | MoveN of int
   | Jz of int
@@ -18,6 +19,7 @@ type t =
 type error = OperandOutOfBounds of (t * int * int * int)
 
 let pp_t fmt = function
+  | Halt -> Format.fprintf fmt "halt"
   | AddN n -> Format.fprintf fmt "addn(%d)" n
   | MoveN n -> Format.fprintf fmt "moven(%d)" n
   | Jz n -> Format.fprintf fmt "jz(%d)" n
@@ -47,6 +49,7 @@ let size = function
 let to_char t =
   let chr = Char.unsafe_chr in
   match t with
+  | Halt -> chr 0x00
   | AddN _ -> chr 0x01
   | MoveN _ -> chr 0x02
   | Jz _ -> chr 0x03

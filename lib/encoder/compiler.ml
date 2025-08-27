@@ -82,20 +82,41 @@ let parse_sequence source =
   parse [] 0
 ;;
 
+let rec fixed_point f x =
+  let x' = f x in
+  if Poly.( = ) x x' then x else fixed_point f x'
+;;
+
 (* apply micro optimizations on intermediate tokens *)
 let optimize_instructions instructions =
   let open Instruction in
+  let rec chunkify acc sum i_multiple i_neg i_pos =
+    let v_min = -128 in
+    let v_max = 127 in
+    match sum with
+    | 0 -> acc
+    | 1 -> i_pos :: acc
+    | -1 -> i_neg :: acc
+    | v when v > v_max ->
+      chunkify (i_multiple v_max :: acc) (v - v_max) i_multiple i_neg i_pos
+    | v when v < v_min ->
+      chunkify (i_multiple v_min :: acc) (v - v_min) i_multiple i_neg i_pos
+    | v -> i_multiple v :: acc
+  in
   let rec optimize acc = function
     | [] -> List.rev acc
-    | Instr (AddN 1) :: rest -> optimize (Instr Add1 :: acc) rest
-    | Instr (AddN -1) :: rest -> optimize (Instr Sub1 :: acc) rest
-    | Instr (MoveN 1) :: rest -> optimize (Instr Move1R :: acc) rest
-    | Instr (MoveN -1) :: rest -> optimize (Instr Move1L :: acc) rest
-    | Instr (AddN n) :: Instr (AddN m) :: rest when n + m = 0 ->
-      (* +n followed by -n cancels out (using signed AddN) *)
+    | Instr (AddN 0) :: rest | Instr (MoveN 0) :: rest ->
+      (* this should never happen but we use it anyways *)
       optimize acc rest
-    | Instr (MoveN n) :: Instr (MoveN m) :: rest when n + m = 0 ->
-      (* right then left with equal magnitude cancels out *)
+    | Instr (AddN n) :: Instr (AddN m) :: rest ->
+      let acc =
+        chunkify acc (n + m) (fun v -> Instr (AddN v)) (Instr Sub1) (Instr Add1)
+      in
+      optimize acc rest
+    | Instr (MoveN n) :: Instr (MoveN m) :: rest ->
+      let acc =
+        chunkify acc (n + m) (fun v -> Instr (MoveN v)) (Instr Move1L) (Instr Move1R)
+      in
       optimize acc rest
     | Instr Move1L :: Instr Move1R :: rest | Instr Move1R :: Instr Move1L :: rest ->
       (* right then left with equal magnitude cancels out, requires running again *)
@@ -103,13 +124,13 @@ let optimize_instructions instructions =
     | Instr Add1 :: Instr Sub1 :: rest | Instr Sub1 :: Instr Add1 :: rest ->
       (* +n followed by -n cancels out, requires running again *)
       optimize acc rest
+    | Instr (AddN 1) :: rest -> optimize (Instr Add1 :: acc) rest
+    | Instr (AddN -1) :: rest -> optimize (Instr Sub1 :: acc) rest
+    | Instr (MoveN 1) :: rest -> optimize (Instr Move1R :: acc) rest
+    | Instr (MoveN -1) :: rest -> optimize (Instr Move1L :: acc) rest
     | instr :: rest -> optimize (instr :: acc) rest
   in
   (* iterate optimization to a fixed point (as many times as needed until nothing changes) *)
-  let rec fixed_point f x =
-    let x' = f x in
-    if Poly.( = ) x x' then x else fixed_point f x'
-  in
   fixed_point (fun instrs -> optimize [] instrs) instructions
 ;;
 
@@ -118,23 +139,31 @@ let pattern_optimize instructions =
   let open Instruction in
   let rec optimize acc = function
     | [] -> List.rev acc
-    (* optimized [-] and [+] -> setzero *)
-    | OpenLoop :: Instr Add1 :: CloseLoop :: rest
-    | OpenLoop :: Instr Sub1 :: CloseLoop :: rest -> optimize (Instr SetZero :: acc) rest
-    (* optimized [>+<-] -> transferr *)
+    | OpenLoop :: (Instr Add1 | Instr Sub1) :: CloseLoop :: rest ->
+      (* optimized [-] and [+] -> SetZero *)
+      optimize (Instr SetZero :: acc) rest
+    | (Instr Add1 | Instr Sub1 | Instr (AddN _)) :: Instr SetZero :: rest ->
+      (* dead before SetZero *)
+      optimize (Instr SetZero :: acc) rest
     | OpenLoop
       :: Instr Move1R
       :: Instr Add1
       :: Instr Move1L
       :: Instr Sub1
       :: CloseLoop
-      :: rest -> optimize (Instr TransferR :: acc) rest
-    (* [[[]]] pattern: runtime CALL extension *)
+      :: rest ->
+      (* optimized [>+<-] -> TransferR *)
+      optimize (Instr TransferR :: acc) rest
     | OpenLoop :: OpenLoop :: OpenLoop :: CloseLoop :: CloseLoop :: CloseLoop :: rest ->
+      (* [[[]]] pattern: runtime Call extension *)
       optimize (Instr Call :: acc) rest
+    | OpenLoop :: OpenLoop :: CloseLoop :: CloseLoop :: rest
+    | OpenLoop :: CloseLoop :: rest ->
+      (* [] and [[]] are infinite loops, we halt. [[[[]]]] and more we don't give a fuck. *)
+      optimize (Instr Halt :: acc) rest
     | instr :: rest -> optimize (instr :: acc) rest
   in
-  optimize [] instructions
+  fixed_point (fun instrs -> optimize [] instrs) instructions
 ;;
 
 let map_offsets instructions =
