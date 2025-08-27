@@ -20,8 +20,8 @@ val pp_intermediate_instr_w_offset
 
 val parse_sequence : string -> intermediate_instr list
 val optimize_instructions : intermediate_instr list -> intermediate_instr list
-val pattern_optimize : intermediate_instr list -> intermediate_instr list
-val map_offsets : intermediate_instr list -> intermediate_instr_w_offset list
+val optimize_pattern : intermediate_instr list -> intermediate_instr list
+val bind_instruction_offsets : intermediate_instr list -> intermediate_instr_w_offset list
 val resolve_jumps : intermediate_instr_w_offset list -> (Instruction.t list, error) result
 val encode_to_bytes : Instruction.t list -> (bytes list, error) result
 val combine_instruction_bytes : bytes list -> bytes

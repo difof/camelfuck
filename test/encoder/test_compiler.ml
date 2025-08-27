@@ -79,7 +79,7 @@ let show_offset = function
 ;;
 
 let expect_offsets name source expected =
-  let actual = parse_sequence source |> map_offsets in
+  let actual = parse_sequence source |> bind_instruction_offsets in
   let actual_s = List.map show_offset actual in
   let expected_s = List.map show_offset expected in
   Alcotest.(check (list string)) name expected_s actual_s
@@ -120,7 +120,7 @@ let test_offsets_mixed () =
 ;;
 
 let expect_resolve name source expected =
-  let inter = parse_sequence source |> map_offsets in
+  let inter = parse_sequence source |> bind_instruction_offsets in
   match resolve_jumps inter with
   | Ok actual ->
     Alcotest.(check (list string))
@@ -131,7 +131,7 @@ let expect_resolve name source expected =
 ;;
 
 let expect_resolve_error name source expected_err_s =
-  let inter = parse_sequence source |> map_offsets in
+  let inter = parse_sequence source |> bind_instruction_offsets in
   match resolve_jumps inter with
   | Ok _ -> Alcotest.failf "%s: expected Error, got Ok" name
   | Error err -> Alcotest.(check string) name expected_err_s (show_error err)
@@ -164,7 +164,7 @@ let test_resolve_unmatched_open () =
 
 (* structural pattern optimization tests *)
 let expect_pattern name source expected =
-  let actual = parse_sequence source |> optimize_instructions |> pattern_optimize in
+  let actual = parse_sequence source |> optimize_instructions |> optimize_pattern in
   let expected_s = List.map show_intermediate expected in
   let actual_s = List.map show_intermediate actual in
   Alcotest.(check (list string)) name expected_s actual_s
@@ -230,7 +230,7 @@ let () =
         ; test_case "loops" `Quick test_loops
         ; test_case "ignores" `Quick test_ignores
         ] )
-    ; ( "map_offsets"
+    ; ( "bind_instruction_offsets"
       , [ test_case "empty" `Quick test_offsets_empty
         ; test_case "mixed" `Quick test_offsets_mixed
         ] )
@@ -242,7 +242,7 @@ let () =
         ; test_case "unmatched close" `Quick test_resolve_unmatched_close
         ; test_case "unmatched open" `Quick test_resolve_unmatched_open
         ] )
-    ; ( "pattern_optimize"
+    ; ( "optimize_pattern"
       , [ test_case "setzero" `Quick test_pattern_setzero
         ; test_case "transferr" `Quick test_pattern_copy
         ; test_case "call" `Quick test_pattern_call

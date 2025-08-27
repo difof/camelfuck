@@ -135,7 +135,7 @@ let optimize_instructions instructions =
 ;;
 
 (* detect common patterns structurally on loops and replace with specialized instructions *)
-let pattern_optimize instructions =
+let optimize_pattern instructions =
   let open Instruction in
   let rec optimize acc = function
     | [] -> List.rev acc
@@ -159,14 +159,14 @@ let pattern_optimize instructions =
       optimize (Instr Call :: acc) rest
     | OpenLoop :: OpenLoop :: CloseLoop :: CloseLoop :: rest
     | OpenLoop :: CloseLoop :: rest ->
-      (* [] and [[]] are infinite loops, we halt. [[[[]]]] and more we don't give a fuck. *)
-      optimize (Instr Halt :: acc) rest
+      (* [] and [[]] are infinite loops, we hang. [[[[]]]] and more we don't give a fuck. *)
+      optimize (Instr Hang :: acc) rest
     | instr :: rest -> optimize (instr :: acc) rest
   in
   fixed_point (fun instrs -> optimize [] instrs) instructions
 ;;
 
-let map_offsets instructions =
+let bind_instruction_offsets instructions =
   instructions
   |> List.fold ~init:([], 0) ~f:(fun (prev_instructions, offset) instr ->
     let size =
@@ -182,24 +182,25 @@ let map_offsets instructions =
 let resolve_jumps instructions_w_offset =
   let open Result in
   let open Hashtbl in
-  let fill_jump_table jump_table =
+  let add_jump_checked jump_table stack instr offset =
+    match instr with
+    | OpenLoop -> Ok (offset :: stack)
+    | CloseLoop ->
+      (match stack with
+       | hd :: rest ->
+         set jump_table ~key:hd ~data:offset;
+         set jump_table ~key:offset ~data:hd;
+         Ok rest
+       | [] -> Error (UnmatchedClosingBracket offset))
+    | _ -> Ok stack
+  in
+  let build_jump_table jump_table =
     match
       List.fold
         instructions_w_offset
         ~init:(Ok [])
         ~f:(fun acc (IntInstrWOffset (instr, offset)) ->
-          acc
-          >>= fun stack ->
-          match instr with
-          | OpenLoop -> Ok (offset :: stack)
-          | CloseLoop ->
-            (match stack with
-             | hd :: rest ->
-               set jump_table ~key:hd ~data:offset;
-               set jump_table ~key:offset ~data:hd;
-               Ok rest
-             | [] -> Error (UnmatchedClosingBracket offset))
-          | _ -> Ok stack)
+          acc >>= fun stack -> add_jump_checked jump_table stack instr offset)
     with
     | Ok [] -> Ok jump_table
     | Ok (hd :: _) -> Error (UnmatchedOpeningBracket hd)
@@ -217,7 +218,7 @@ let resolve_jumps instructions_w_offset =
         Instruction.Jnz (target - offset)
       | Instr real_instr -> real_instr)
   in
-  create (module Int) |> fill_jump_table >>| map_intermediate_to_instr
+  create (module Int) |> build_jump_table >>| map_intermediate_to_instr
 ;;
 
 let encode_to_bytes instructions =
@@ -250,8 +251,8 @@ let compile source =
   source
   |> parse_sequence
   |> optimize_instructions
-  |> pattern_optimize
-  |> map_offsets
+  |> optimize_pattern
+  |> bind_instruction_offsets
   |> resolve_jumps
   >>= encode_to_bytes
   >>| combine_instruction_bytes
