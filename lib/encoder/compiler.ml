@@ -100,8 +100,12 @@ let optimize_instructions instructions =
       optimize acc rest
     | instr :: rest -> optimize (instr :: acc) rest
   in
-  (* double optimize to cancel out no imm instructions *)
-  optimize [] instructions |> optimize []
+  (* iterate optimization to a fixed point (as many times as needed until nothing changes) *)
+  let rec fixed_point f x =
+    let x' = f x in
+    if Poly.( = ) x x' then x else fixed_point f x'
+  in
+  fixed_point (fun instrs -> optimize [] instrs) instructions
 ;;
 
 (* detect common patterns structurally on loops and replace with specialized instructions *)
@@ -211,8 +215,8 @@ let compile source =
   let open Result in
   source
   |> parse_sequence
-  |> pattern_optimize
   |> optimize_instructions
+  |> pattern_optimize
   |> map_offsets
   |> resolve_jumps
   >>= encode_to_bytes
