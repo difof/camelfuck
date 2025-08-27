@@ -164,7 +164,7 @@ let test_resolve_unmatched_open () =
 
 (* structural pattern optimization tests *)
 let expect_pattern name source expected =
-  let actual = parse_sequence source |> pattern_optimize in
+  let actual = parse_sequence source |> optimize_instructions |> pattern_optimize in
   let expected_s = List.map show_intermediate expected in
   let actual_s = List.map show_intermediate actual in
   Alcotest.(check (list string)) name expected_s actual_s
