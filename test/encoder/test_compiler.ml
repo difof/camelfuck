@@ -171,7 +171,7 @@ let expect_pattern name source expected =
 ;;
 
 let test_pattern_setzero () = expect_pattern "setzero" "[-]" [ Instr SetZero ]
-let test_pattern_copy () = expect_pattern "copy" "[>+<-]" [ Instr Copy ]
+let test_pattern_copy () = expect_pattern "transferr" "[>+<-]" [ Instr TransferR ]
 let test_pattern_call () = expect_pattern "call" "[[[]]]" [ Instr Call ]
 
 let () =
@@ -199,7 +199,7 @@ let () =
         ] )
     ; ( "pattern_optimize"
       , [ test_case "setzero" `Quick test_pattern_setzero
-        ; test_case "copy" `Quick test_pattern_copy
+        ; test_case "transferr" `Quick test_pattern_copy
         ; test_case "call" `Quick test_pattern_call
         ] )
     ]
