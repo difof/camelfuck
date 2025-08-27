@@ -212,10 +212,12 @@ let resolve_jumps instructions_w_offset =
       match instr with
       | OpenLoop ->
         let target = find_exn jump_table offset in
-        Instruction.Jz (target - offset)
+        let jump_to = target + 5 in
+        Instruction.Jz (jump_to - offset)
       | CloseLoop ->
         let target = find_exn jump_table offset in
-        Instruction.Jnz (target - offset)
+        let jump_to = target + 5 in
+        Instruction.Jnz (jump_to - offset)
       | Instr real_instr -> real_instr)
   in
   create (module Int) |> build_jump_table >>| map_intermediate_to_instr
