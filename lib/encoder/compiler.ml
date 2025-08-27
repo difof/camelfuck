@@ -39,16 +39,21 @@ let parse_sequence source =
     then acc, pos
     else count_consecutive (pos + 1) target_char (acc + 1)
   in
-  let rec chunkify remaining acc =
+  let rec chunkify cap remaining acc =
     if remaining <= 0
     then List.rev acc
     else (
-      let take = Int.min 127 remaining in
-      chunkify (remaining - take) (take :: acc))
+      let take = Int.min cap remaining in
+      chunkify cap (remaining - take) (take :: acc))
   in
   let accumulate_chunks acc pos target_char instr =
     let count, next_pos = count_consecutive pos target_char 0 in
-    let chunks = chunkify count [] |> List.map ~f:(fun n -> Instr (instr n)) in
+    let cap =
+      match target_char with
+      | '-' | '<' -> 128
+      | _ -> 127
+    in
+    let chunks = chunkify cap count [] |> List.map ~f:(fun n -> Instr (instr n)) in
     List.fold chunks ~init:acc ~f:(fun acc i -> i :: acc), next_pos
   in
   let rec parse acc pos =
