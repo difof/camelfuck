@@ -174,6 +174,51 @@ let test_pattern_setzero () = expect_pattern "setzero" "[-]" [ Instr SetZero ]
 let test_pattern_copy () = expect_pattern "transferr" "[>+<-]" [ Instr TransferR ]
 let test_pattern_call () = expect_pattern "call" "[[[]]]" [ Instr Call ]
 
+(* operation folding + encoding tests *)
+let bytes_to_list b =
+  let len = Bytes.length b in
+  let rec loop acc i =
+    if i = len then List.rev acc else loop (Bytes.get_uint8 b i :: acc) (i + 1)
+  in
+  loop [] 0
+;;
+
+let expect_compile_bytes name source expected_bytes =
+  match compile source with
+  | Ok b -> Alcotest.(check (list int)) name expected_bytes (bytes_to_list b)
+  | Error _ -> Alcotest.failf "%s: expected Ok, got Error" name
+;;
+
+let make c n = String.make n c
+
+let test_fold_add () =
+  (* 127 + 127 -> two AddN 127 opcodes *)
+  expect_compile_bytes "add 127+127" (make '+' 254) [ 0x01; 0x7F; 0x01; 0x7F ];
+  (* -128 + -128 -> two AddN -128 opcodes *)
+  expect_compile_bytes "add -128+-128" (make '-' 256) [ 0x01; 0x80; 0x01; 0x80 ];
+  (* 90 + 90 -> 127 + 53 remainder after folding *)
+  expect_compile_bytes
+    "add 90+90 (folded)"
+    (make '+' 90 ^ " " ^ make '+' 90)
+    [ 0x01; 0x7F; 0x01; 0x35 ];
+  (* 100 + -100 -> cancels to empty *)
+  expect_compile_bytes "add cancels to zero" (make '+' 100 ^ make '-' 100) []
+;;
+
+let test_fold_move () =
+  (* 127 + 127 -> two MoveN 127 opcodes *)
+  expect_compile_bytes "move 127+127" (make '>' 254) [ 0x02; 0x7F; 0x02; 0x7F ];
+  (* -128 + -128 -> two MoveN -128 opcodes *)
+  expect_compile_bytes "move -128+-128" (make '<' 256) [ 0x02; 0x80; 0x02; 0x80 ];
+  (* 90 + 90 -> 127 + 53 remainder after folding *)
+  expect_compile_bytes
+    "move 90+90 (folded)"
+    (make '>' 90 ^ " " ^ make '>' 90)
+    [ 0x02; 0x7F; 0x02; 0x35 ];
+  (* 100 + -100 -> cancels to empty *)
+  expect_compile_bytes "move cancels to zero" (make '>' 100 ^ make '<' 100) []
+;;
+
 let () =
   let open Alcotest in
   run
@@ -201,6 +246,10 @@ let () =
       , [ test_case "setzero" `Quick test_pattern_setzero
         ; test_case "transferr" `Quick test_pattern_copy
         ; test_case "call" `Quick test_pattern_call
+        ] )
+    ; ( "folding"
+      , [ test_case "add folding encodes" `Quick test_fold_add
+        ; test_case "move folding encodes" `Quick test_fold_move
         ] )
     ]
 ;;
