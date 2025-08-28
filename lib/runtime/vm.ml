@@ -10,7 +10,21 @@ type t =
   ; mutable pc : int
   }
 
-exception VMExn of string
+type error =
+  | BytecodeOutOfBounds of int
+  | JumpOutOfBounds of int
+  | TapeError of Tape.error
+  | Exception of exn
+
+let pp_error fmt = function
+  | BytecodeOutOfBounds pos ->
+    Format.fprintf fmt "Bytecode out of bounds at position %d" pos
+  | JumpOutOfBounds pos -> Format.fprintf fmt "Jump out of bounds to position %d" pos
+  | TapeError err -> Tape.pp_error fmt err
+  | Exception ex -> Format.fprintf fmt "%s" (Printexc.to_string ex)
+;;
+
+exception VMExn of error
 
 let create
       ?(io = In_channel.stdin, Out_channel.stdout)
@@ -40,11 +54,11 @@ let[@inline] advance ?(replace = -1) ?(n = 1) t =
 
 let[@inline] ensure_can_read t bytes =
   let last = t.pc + bytes in
-  if last >= t.code_length then raise (VMExn "bytecode out of bounds")
+  if last >= t.code_length then raise (VMExn (BytecodeOutOfBounds last))
 ;;
 
 let[@inline] ensure_pc_bounds t pos =
-  if pos < 0 || pos > t.code_length then raise (VMExn "jump out of bounds") else t
+  if pos < 0 || pos > t.code_length then raise (VMExn (JumpOutOfBounds pos)) else t
 ;;
 
 let[@inline] read_imm_i8 t =
@@ -136,11 +150,12 @@ let exec_instr t = function
 
 let rec run_exn t =
   if t.pc >= t.code_length
-  then Ok t
+  then t
   else run_exn (Bytes.unsafe_get t.code t.pc |> exec_instr t)
 ;;
 
 let run t =
-  try run_exn t with
-  | VMExn ex -> Error ex
+  try Ok (run_exn t) with
+  | VMExn err -> Error err
+  | Tape.TapeExn err -> Error (TapeError err)
 ;;
