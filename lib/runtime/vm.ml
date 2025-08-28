@@ -47,6 +47,17 @@ let hang t =
   t
 ;;
 
+let[@inline] op_transfer ?(pos = 1) t =
+  let v = Tape.get t.memory in
+  if v <> 0
+  then (
+    Tape.set t.memory 0;
+    Tape.move_exn t.memory pos;
+    Tape.set t.memory (Tape.get t.memory + v);
+    Tape.move_exn t.memory (-pos));
+  t
+;;
+
 let[@inline] advance ?(replace = -1) ?(n = 1) t =
   if replace >= 0 then t.pc <- replace else t.pc <- t.pc + n;
   t
@@ -94,9 +105,9 @@ let exec_instr t = function
     else advance t ~n:5
   | '\x04' ->
     (* Jnz imm32: size 5, relative to current pc *)
-    let rel = read_imm_i32 t in
     if Tape.get t.memory <> 0
     then (
+      let rel = read_imm_i32 t in
       let new_pc = t.pc + rel in
       ensure_pc_bounds t new_pc |> advance ~replace:new_pc)
     else advance t ~n:5
@@ -119,14 +130,7 @@ let exec_instr t = function
     advance t
   | '\x09' ->
     (* TransferR: move current cell value to right cell, zero current *)
-    let v = Tape.get t.memory in
-    if v <> 0
-    then (
-      Tape.set t.memory 0;
-      Tape.move_exn t.memory 1;
-      Tape.set t.memory (Tape.get t.memory + v);
-      Tape.move_exn t.memory (-1));
-    advance t
+    op_transfer t |> advance
   | '\x0A' ->
     (* Add1 *)
     Tape.set t.memory (Tape.get t.memory + 1);
@@ -143,6 +147,9 @@ let exec_instr t = function
     (* Move1L *)
     Tape.move_exn t.memory (-1);
     advance t
+  | '\x0E' ->
+    (* TransferL: move current cell value to left cell, zero current *)
+    op_transfer ~pos:(-1) t |> advance
   | _ ->
     (* Unknown opcode: treat as no-op advance *)
     advance t
