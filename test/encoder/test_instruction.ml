@@ -68,11 +68,24 @@ let test_noarg () =
   expect_ok "move1l" Move1L [ 0x0D ]
 ;;
 
+let test_transfern () =
+  expect_ok "transfern +3" (TransferN 3) [ 0x0F; 0x03 ];
+  expect_ok "transfern -1" (TransferN (-1)) [ 0x0F; 0xFF ];
+  expect_ok "transfern -128" (TransferN (-128)) [ 0x0F; 0x80 ];
+  expect_ok "transfern 127" (TransferN 127) [ 0x0F; 0x7F ];
+  expect_error "transfern -129" (TransferN (-129));
+  expect_error "transfern 128" (TransferN 128)
+;;
+
 let () =
   let open Alcotest in
   run
     "Instruction encoding tests"
-    [ "byte ops", [ test_case "add" `Quick test_add; test_case "move" `Quick test_move ]
+    [ ( "byte ops"
+      , [ test_case "add" `Quick test_add
+        ; test_case "move" `Quick test_move
+        ; test_case "transfern" `Quick test_transfern
+        ] )
     ; "jumps", [ test_case "jz" `Quick test_jz; test_case "jnz" `Quick test_jnz ]
     ; "no-arg ops", [ test_case "no-arg encodings" `Quick test_noarg ]
     ]
