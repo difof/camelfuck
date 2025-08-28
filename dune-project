@@ -20,3 +20,6 @@
 
 (package
  (name encoder))
+
+(package
+ (name runtime))
