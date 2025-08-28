@@ -1,19 +1,26 @@
+open Encoder.Compiler
+open Runtime.Vm
+
 let compile_exn s =
-  match Encoder.Compiler.compile s with
+  match compile s with
   | Ok b -> b
   | Error _ -> failwith "compile error"
 ;;
 
-let make_vm ?io ?memory code = Runtime.Vm.create ?io ?memory code
-let run_vm vm = Runtime.Vm.run vm
-let get_tape vm = vm.Runtime.Vm.memory
+let make_vm ?io ?(memory = Tape.create 256) code = create ?io ~memory code, memory
 
-let expect_cell name vm idx expected =
-  let mem = get_tape vm in
-  let logical_origin = Tape.logical_pos mem in
-  Tape.move_exn mem (idx - logical_origin);
-  let actual = Tape.get mem in
-  Tape.move_exn mem (logical_origin - idx);
+let run_vm vm =
+  match run vm with
+  | Ok _ -> ()
+  | Error err -> Alcotest.failf "Test failed with error: %a" pp_error err
+;;
+
+let expect_cell name mem idx expected =
+  let open Tape in
+  let logical_origin = logical_pos mem in
+  move_exn mem (idx - logical_origin);
+  let actual = get mem in
+  move_exn mem (logical_origin - idx);
   Alcotest.(check int) name expected actual
 ;;
 
@@ -21,28 +28,28 @@ let test_add_and_move () =
   (* Brainfuck: +++>++ moves value 3 at cell0, value 2 at cell1 *)
   let src = "+++>++" in
   let code = compile_exn src in
-  let vm = make_vm code in
-  let vm = run_vm vm in
-  expect_cell "cell0 is 3" vm 0 3;
-  expect_cell "cell1 is 2" vm 1 2
+  let vm, mem = make_vm code in
+  run_vm vm;
+  expect_cell "cell0 is 3" mem 0 3;
+  expect_cell "cell1 is 2" mem 1 2
 ;;
 
 let test_loop_transfer () =
   (* Brainfuck: [>+<-] performs a transfer from cell0 to cell1 *)
   let src = "+++[>+<-]" in
   let code = compile_exn src in
-  let vm = make_vm code in
-  let vm = run_vm vm in
-  expect_cell "cell0 becomes 0" vm 0 0;
-  expect_cell "cell1 becomes 3" vm 1 3
+  let vm, mem = make_vm code in
+  run_vm vm;
+  expect_cell "cell0 becomes 0" mem 0 0;
+  expect_cell "cell1 becomes 3" mem 1 3
 ;;
 
 let test_setzero () =
   let src = "+++[-]" in
   let code = compile_exn src in
-  let vm = make_vm code in
-  let vm = run_vm vm in
-  expect_cell "cell0 zeroed" vm 0 0
+  let vm, mem = make_vm code in
+  run_vm vm;
+  expect_cell "cell0 zeroed" mem 0 0
 ;;
 
 let test_hello_progression () =
@@ -52,19 +59,18 @@ let test_hello_progression () =
     ^ "+++.>++.+++++++..+++.>>.>-.<<-.<.+++.------.--------.>>>+.>-."
   in
   let code = compile_exn src in
-  let memory = Tape.create 256 in
-  let vm = make_vm ~memory code in
-  let vm = run_vm vm in
-  let memory = get_tape vm in
+  let mem = Tape.create 256 in
+  let vm, _ = make_vm ~memory:mem code in
+  run_vm vm;
   (* assert pointer at 6 *)
-  Alcotest.(check int) "pointer at 6" 6 (Tape.logical_pos memory);
+  Alcotest.(check int) "pointer at 6" 6 (Tape.logical_pos mem);
   (* read first 7 bytes from index 0 using blit *)
-  let original_pos = Tape.logical_pos memory in
-  Tape.move_exn memory (-original_pos);
+  let original_pos = Tape.logical_pos mem in
+  Tape.move_exn mem (-original_pos);
   let buf = Bytes.make 7 '\000' in
-  Tape.blit_out_exn memory buf 7;
+  Tape.blit_out_exn mem buf 7;
   (* restore pointer position *)
-  Tape.move_exn memory original_pos;
+  Tape.move_exn mem original_pos;
   let to_list b =
     let rec loop acc i =
       if i = Bytes.length b
