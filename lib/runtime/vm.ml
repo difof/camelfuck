@@ -150,6 +150,10 @@ let exec_instr t = function
   | '\x0E' ->
     (* Transfer1L: move current cell value to left cell, zero current *)
     op_transfer ~pos:(-1) t |> advance
+  | '\x0F' ->
+    (* TransferN: move current cell value by N cell, zero current *)
+    let n = read_imm_i8 t in
+    op_transfer ~pos:n t |> advance ~n:2
   | _ ->
     (* Unknown opcode: treat as no-op advance *)
     advance t
