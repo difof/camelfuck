@@ -26,9 +26,25 @@ let create
   }
 ;;
 
+let hang t =
+  while true do
+    ()
+  done;
+  t
+;;
+
+let[@inline] advance ?(replace = -1) ?(n = 1) t =
+  if replace >= 0 then t.pc <- replace else t.pc <- t.pc + n;
+  t
+;;
+
 let[@inline] ensure_can_read t bytes =
   let last = t.pc + bytes in
   if last >= t.code_length then raise (VMExn "bytecode out of bounds")
+;;
+
+let[@inline] ensure_pc_bounds t pos =
+  if pos < 0 || pos > t.code_length then raise (VMExn "jump out of bounds") else t
 ;;
 
 let[@inline] read_imm_i8 t =
@@ -45,67 +61,48 @@ let[@inline] read_imm_i32 t =
 let exec_instr t = function
   | '\x00' ->
     (* Hang *)
-    while true do
-      ()
-    done;
-    t
+    hang t
   | '\x01' ->
     (* AddN imm8: size 2 *)
-    let imm = read_imm_i8 t in
-    Tape.set t.memory (Tape.get t.memory + imm);
-    t.pc <- t.pc + 2;
-    t
+    Tape.set t.memory (Tape.get t.memory + read_imm_i8 t);
+    advance t ~n:2
   | '\x02' ->
     (* MoveN imm8: size 2 *)
-    let imm = read_imm_i8 t in
-    Tape.move_exn t.memory imm;
-    t.pc <- t.pc + 2;
-    t
+    Tape.move_exn t.memory (read_imm_i8 t);
+    advance t ~n:2
   | '\x03' ->
     (* Jz imm32: size 5, relative to current pc *)
-    let rel = read_imm_i32 t in
     if Tape.get t.memory = 0
     then (
+      let rel = read_imm_i32 t in
       let new_pc = t.pc + rel in
-      if new_pc < 0 || new_pc > t.code_length then raise (VMExn "jump out of bounds");
-      t.pc <- new_pc;
-      t)
-    else (
-      t.pc <- t.pc + 5;
-      t)
+      ensure_pc_bounds t new_pc |> advance ~replace:new_pc)
+    else advance t ~n:5
   | '\x04' ->
     (* Jnz imm32: size 5, relative to current pc *)
     let rel = read_imm_i32 t in
     if Tape.get t.memory <> 0
     then (
       let new_pc = t.pc + rel in
-      if new_pc < 0 || new_pc > t.code_length then raise (VMExn "jump out of bounds");
-      t.pc <- new_pc;
-      t)
-    else (
-      t.pc <- t.pc + 5;
-      t)
+      ensure_pc_bounds t new_pc |> advance ~replace:new_pc)
+    else advance t ~n:5
   | '\x05' ->
     (* In *)
     let v = In_channel.input_char t.input |> Option.value ~default:'\000' |> Char.code in
     Tape.set t.memory v;
-    t.pc <- t.pc + 1;
-    t
+    advance t
   | '\x06' ->
     (* Out *)
     Tape.get t.memory |> Char.chr |> Out_channel.output_char t.output;
     Out_channel.flush t.output;
-    t.pc <- t.pc + 1;
-    t
+    advance t
   | '\x07' ->
     (* Call: runtime extension placeholder - no-op for now *)
-    t.pc <- t.pc + 1;
-    t
+    advance t
   | '\x08' ->
     (* SetZero *)
     Tape.set t.memory 0;
-    t.pc <- t.pc + 1;
-    t
+    advance t
   | '\x09' ->
     (* TransferR: move current cell value to right cell, zero current *)
     let v = Tape.get t.memory in
@@ -115,32 +112,26 @@ let exec_instr t = function
       Tape.move_exn t.memory 1;
       Tape.set t.memory (Tape.get t.memory + v);
       Tape.move_exn t.memory (-1));
-    t.pc <- t.pc + 1;
-    t
+    advance t
   | '\x0A' ->
     (* Add1 *)
     Tape.set t.memory (Tape.get t.memory + 1);
-    t.pc <- t.pc + 1;
-    t
+    advance t
   | '\x0B' ->
     (* Sub1 *)
     Tape.set t.memory (Tape.get t.memory - 1);
-    t.pc <- t.pc + 1;
-    t
+    advance t
   | '\x0C' ->
     (* Move1R *)
     Tape.move_exn t.memory 1;
-    t.pc <- t.pc + 1;
-    t
+    advance t
   | '\x0D' ->
     (* Move1L *)
     Tape.move_exn t.memory (-1);
-    t.pc <- t.pc + 1;
-    t
+    advance t
   | _ ->
     (* Unknown opcode: treat as no-op advance *)
-    t.pc <- t.pc + 1;
-    t
+    advance t
 ;;
 
 let rec run t =
