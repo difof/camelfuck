@@ -58,6 +58,13 @@ let[@inline] op_transfer ?(pos = 1) t =
   t
 ;;
 
+let[@inline] op_scan ?(stride = 1) t =
+  while Tape.get t.memory <> 0 do
+    Tape.move_exn t.memory stride
+  done;
+  t
+;;
+
 let[@inline] advance ?(replace = -1) ?(n = 1) t =
   if replace >= 0 then t.pc <- replace else t.pc <- t.pc + n;
   t
@@ -154,6 +161,16 @@ let exec_instr t = function
     (* TransferN: move current cell value by N cell, zero current *)
     let n = read_imm_i8 t in
     op_transfer ~pos:n t |> advance ~n:2
+  | '\x10' ->
+    (* Scan1R *)
+    op_scan t |> advance
+  | '\x11' ->
+    (* Scan1L *)
+    op_scan ~stride:(-1) t |> advance
+  | '\x12' ->
+    (* ScanN imm8 *)
+    let n = read_imm_i8 t in
+    op_scan ~stride:n t |> advance
   | _ ->
     (* Unknown opcode: treat as no-op advance *)
     advance t
