@@ -114,19 +114,64 @@ module Brainfuck = struct
   ;;
 end
 
-let program_from_argv_or_stdin () =
-  let argv = Sys.get_argv () in
-  if Array.length argv > 1
-  then (
-    let filename = argv.(1) in
-    try In_channel.read_all filename with
-    (* TODO: report exceptions *)
-    | _ -> In_channel.input_all stdin)
-  else In_channel.input_all stdin
+let run_optimized program =
+  Encoder.Compiler.compile program
+  |> Result.map ~f:(fun program -> Runtime.Vm.create program |> Runtime.Vm.run)
 ;;
 
-let () =
-  match program_from_argv_or_stdin () |> Brainfuck.run with
+let run_raw program =
+  match Brainfuck.run program with
   | Error err -> Format.eprintf "error: %a@\n" Brainfuck.pp_error err
   | Ok _ -> ()
 ;;
+
+type mode =
+  | Raw
+  | Optimized
+
+let parse_mode_and_program () =
+  let mode_ref = ref Optimized in
+  let filename_ref = ref None in
+  let set_mode = function
+    | "raw" -> mode_ref := Raw
+    | "optimized" -> mode_ref := Optimized
+    | s -> failwith ("unknown mode: " ^ s)
+  in
+  let speclist : (string * Stdlib.Arg.spec * string) list =
+    [ "--raw", Stdlib.Arg.Unit (fun () -> mode_ref := Raw), "Run interpreter (raw)"
+    ; ( "--optimized"
+      , Stdlib.Arg.Unit (fun () -> mode_ref := Optimized)
+      , "Run optimized VM (default)" )
+    ; ( "-m"
+      , Stdlib.Arg.Symbol ([ "raw"; "optimized" ], set_mode)
+      , "MODE Select run mode: raw|optimized" )
+    ; ( "--mode"
+      , Stdlib.Arg.Symbol ([ "raw"; "optimized" ], set_mode)
+      , "MODE Select run mode: raw|optimized" )
+    ]
+  in
+  let anon_fun s = filename_ref := Some s in
+  Stdlib.Arg.parse speclist anon_fun "usage: camelfuck [--raw|--optimized|-m MODE] [file]";
+  let program =
+    match !filename_ref with
+    | Some filename ->
+      (try In_channel.read_all filename with
+       | _ -> In_channel.input_all stdin)
+    | None -> In_channel.input_all stdin
+  in
+  !mode_ref, program
+;;
+
+let () =
+  let mode, program = parse_mode_and_program () in
+  match mode with
+  | Raw -> run_raw program
+  | Optimized -> run_optimized program |> ignore
+;;
+
+(*
+   benchmarks
+
+time dune exec camelfuck -- --raw bfprograms/mandlebrot.bf        = 56.73s user 0.51s system 98% cpu 58.269 total
+time dune exec camelfuck -- --optimized bfprograms/mandlebrot.bf  = 17.47s user 0.24s system 96% cpu 18.414 total
+*)

@@ -2,4 +2,4 @@
  (package camelfuck)
  (public_name camelfuck)
  (name main)
- (libraries core stdio tape))
+ (libraries core stdio tape runtime encoder))
