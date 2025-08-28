@@ -17,6 +17,9 @@ type t =
   | Sub1
   | Move1R
   | Move1L
+  | Scan1R
+  | Scan1L
+  | ScanN of int
 
 type error = OperandOutOfBounds of (t * int * int * int)
 
@@ -37,6 +40,9 @@ let pp_t fmt = function
   | Sub1 -> Format.fprintf fmt "sub1"
   | Move1R -> Format.fprintf fmt "move1r"
   | Move1L -> Format.fprintf fmt "move1l"
+  | Scan1R -> Format.fprintf fmt "scan1r"
+  | Scan1L -> Format.fprintf fmt "scan1l"
+  | ScanN n -> Format.fprintf fmt "scann(%d)" n
 ;;
 
 let pp_error fmt = function
@@ -45,7 +51,7 @@ let pp_error fmt = function
 ;;
 
 let size = function
-  | AddN _ | MoveN _ | TransferN _ -> 2
+  | AddN _ | MoveN _ | TransferN _ | ScanN _ -> 2
   | Jz _ | Jnz _ -> 5
   | _ -> 1
 ;;
@@ -69,6 +75,9 @@ let to_char t =
   | Sub1 -> chr 0x0B
   | Move1R -> chr 0x0C
   | Move1L -> chr 0x0D
+  | Scan1R -> chr 0x10
+  | Scan1L -> chr 0x11
+  | ScanN _ -> chr 0x12
 ;;
 
 let encode t =
@@ -94,10 +103,7 @@ let encode t =
     else Ok (op_with_arg t (size t) Bytes.set_int32_le @@ Int32.of_int v)
   in
   match t with
-  | AddN n -> op_with_int8_arg t n
-  | MoveN n -> op_with_int8_arg t n
-  | TransferN n -> op_with_int8_arg t n
-  | Jz rel_pos -> op_with_int32_arg t rel_pos
-  | Jnz rel_pos -> op_with_int32_arg t rel_pos
+  | AddN n | MoveN n | TransferN n | ScanN n -> op_with_int8_arg t n
+  | Jz rel_pos | Jnz rel_pos -> op_with_int32_arg t rel_pos
   | _ -> op_no_arg t
 ;;

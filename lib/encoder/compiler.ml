@@ -145,6 +145,15 @@ let optimize_pattern instructions =
     | (Instr Add1 | Instr Sub1 | Instr (AddN _)) :: Instr SetZero :: rest ->
       (* dead before SetZero *)
       optimize (Instr SetZero :: acc) rest
+    | OpenLoop :: Instr Move1R :: CloseLoop :: rest ->
+      (* [>] *)
+      optimize (Instr Scan1R :: acc) rest
+    | OpenLoop :: Instr Move1L :: CloseLoop :: rest ->
+      (* [<] *)
+      optimize (Instr Scan1L :: acc) rest
+    | OpenLoop :: Instr (MoveN n) :: CloseLoop :: rest ->
+      (* [k</k>] *)
+      optimize (Instr (ScanN n) :: acc) rest
     | OpenLoop
       :: Instr Sub1
       :: Instr Move1R
