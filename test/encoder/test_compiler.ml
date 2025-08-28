@@ -172,6 +172,7 @@ let expect_pattern name source expected =
 
 let test_pattern_setzero () = expect_pattern "setzero" "[-]" [ Instr SetZero ]
 let test_pattern_copy () = expect_pattern "transferr" "[>+<-]" [ Instr TransferR ]
+let test_pattern_copy_l () = expect_pattern "transferl" "[<+>-]" [ Instr TransferL ]
 let test_pattern_call () = expect_pattern "call" "[[[]]]" [ Instr Call ]
 
 (* operation folding + encoding tests *)
@@ -245,6 +246,7 @@ let () =
     ; ( "optimize_pattern"
       , [ test_case "setzero" `Quick test_pattern_setzero
         ; test_case "transferr" `Quick test_pattern_copy
+        ; test_case "transferl" `Quick test_pattern_copy_l
         ; test_case "call" `Quick test_pattern_call
         ] )
     ; ( "folding"

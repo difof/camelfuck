@@ -61,6 +61,7 @@ let test_noarg () =
   expect_ok "call" Call [ 0x07 ];
   expect_ok "setzero" SetZero [ 0x08 ];
   expect_ok "transferr" TransferR [ 0x09 ];
+  expect_ok "transferl" TransferL [ 0x0E ];
   expect_ok "add1" Add1 [ 0x0A ];
   expect_ok "sub1" Sub1 [ 0x0B ];
   expect_ok "move1r" Move1R [ 0x0C ];
