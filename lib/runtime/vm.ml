@@ -134,6 +134,13 @@ let exec_instr t = function
     advance t
 ;;
 
-let rec run t =
-  if t.pc >= t.code_length then t else run (Bytes.unsafe_get t.code t.pc |> exec_instr t)
+let rec run_exn t =
+  if t.pc >= t.code_length
+  then Ok t
+  else run_exn (Bytes.unsafe_get t.code t.pc |> exec_instr t)
+;;
+
+let run t =
+  try run_exn t with
+  | VMExn ex -> Error ex
 ;;
