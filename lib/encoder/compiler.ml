@@ -146,14 +146,37 @@ let optimize_pattern instructions =
       (* dead before SetZero *)
       optimize (Instr SetZero :: acc) rest
     | OpenLoop
+      :: Instr Sub1
+      :: Instr Move1R
+      :: Instr Add1
+      :: Instr Move1L
+      :: CloseLoop
+      :: rest
+    | OpenLoop
       :: Instr Move1R
       :: Instr Add1
       :: Instr Move1L
       :: Instr Sub1
       :: CloseLoop
       :: rest ->
-      (* optimized [>+<-] -> TransferR *)
+      (* optimized [>+<-] or [->+<] -> TransferR *)
       optimize (Instr TransferR :: acc) rest
+    | OpenLoop
+      :: Instr Sub1
+      :: Instr Move1L
+      :: Instr Add1
+      :: Instr Move1R
+      :: CloseLoop
+      :: rest
+    | OpenLoop
+      :: Instr Move1L
+      :: Instr Add1
+      :: Instr Move1R
+      :: Instr Sub1
+      :: CloseLoop
+      :: rest ->
+      (* optimized [<+>-] or [-<+>] -> TransferL *)
+      optimize (Instr TransferL :: acc) rest
     | OpenLoop :: OpenLoop :: OpenLoop :: CloseLoop :: CloseLoop :: CloseLoop :: rest ->
       (* [[[]]] pattern: runtime Call extension *)
       optimize (Instr Call :: acc) rest
