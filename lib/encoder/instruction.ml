@@ -12,6 +12,7 @@ type t =
   | SetZero
   | Transfer1R
   | Transfer1L
+  | TransferN of int
   | Add1
   | Sub1
   | Move1R
@@ -31,6 +32,7 @@ let pp_t fmt = function
   | SetZero -> Format.fprintf fmt "setzero"
   | Transfer1R -> Format.fprintf fmt "transfer1r"
   | Transfer1L -> Format.fprintf fmt "transfer1l"
+  | TransferN n -> Format.fprintf fmt "transfern(%d)" n
   | Add1 -> Format.fprintf fmt "add1"
   | Sub1 -> Format.fprintf fmt "sub1"
   | Move1R -> Format.fprintf fmt "move1r"
@@ -43,7 +45,7 @@ let pp_error fmt = function
 ;;
 
 let size = function
-  | AddN _ | MoveN _ -> 2
+  | AddN _ | MoveN _ | TransferN _ -> 2
   | Jz _ | Jnz _ -> 5
   | _ -> 1
 ;;
@@ -62,6 +64,7 @@ let to_char t =
   | SetZero -> chr 0x08
   | Transfer1R -> chr 0x09
   | Transfer1L -> chr 0x0E
+  | TransferN _ -> chr 0x0F
   | Add1 -> chr 0x0A
   | Sub1 -> chr 0x0B
   | Move1R -> chr 0x0C
@@ -93,6 +96,7 @@ let encode t =
   match t with
   | AddN n -> op_with_int8_arg t n
   | MoveN n -> op_with_int8_arg t n
+  | TransferN n -> op_with_int8_arg t n
   | Jz rel_pos -> op_with_int32_arg t rel_pos
   | Jnz rel_pos -> op_with_int32_arg t rel_pos
   | _ -> op_no_arg t
