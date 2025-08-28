@@ -65,7 +65,9 @@ let test_noarg () =
   expect_ok "add1" Add1 [ 0x0A ];
   expect_ok "sub1" Sub1 [ 0x0B ];
   expect_ok "move1r" Move1R [ 0x0C ];
-  expect_ok "move1l" Move1L [ 0x0D ]
+  expect_ok "move1l" Move1L [ 0x0D ];
+  expect_ok "scan1r" Scan1R [ 0x10 ];
+  expect_ok "scan1l" Scan1L [ 0x11 ]
 ;;
 
 let test_transfern () =
@@ -77,6 +79,15 @@ let test_transfern () =
   expect_error "transfern 128" (TransferN 128)
 ;;
 
+let test_scann () =
+  expect_ok "scann +4" (ScanN 4) [ 0x12; 0x04 ];
+  expect_ok "scann -1" (ScanN (-1)) [ 0x12; 0xFF ];
+  expect_ok "scann -128" (ScanN (-128)) [ 0x12; 0x80 ];
+  expect_ok "scann 127" (ScanN 127) [ 0x12; 0x7F ];
+  expect_error "scann -129" (ScanN (-129));
+  expect_error "scann 128" (ScanN 128)
+;;
+
 let () =
   let open Alcotest in
   run
@@ -85,6 +96,7 @@ let () =
       , [ test_case "add" `Quick test_add
         ; test_case "move" `Quick test_move
         ; test_case "transfern" `Quick test_transfern
+        ; test_case "scann" `Quick test_scann
         ] )
     ; "jumps", [ test_case "jz" `Quick test_jz; test_case "jnz" `Quick test_jnz ]
     ; "no-arg ops", [ test_case "no-arg encodings" `Quick test_noarg ]

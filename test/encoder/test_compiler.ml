@@ -185,6 +185,11 @@ let test_pattern_transfern_l () =
   expect_pattern "transfern left" "[<<+>>-]" [ Instr (TransferN (-2)) ]
 ;;
 
+let test_pattern_scan1r () = expect_pattern "scan1r" "[>]" [ Instr Scan1R ]
+let test_pattern_scan1l () = expect_pattern "scan1l" "[<]" [ Instr Scan1L ]
+let test_pattern_scann_r () = expect_pattern "scann right" "[>>]" [ Instr (ScanN 2) ]
+let test_pattern_scann_l () = expect_pattern "scann left" "[<<]" [ Instr (ScanN (-2)) ]
+
 (* operation folding + encoding tests *)
 let bytes_to_list b =
   let len = Bytes.length b in
@@ -259,6 +264,10 @@ let () =
         ; test_case "transfer1l" `Quick test_pattern_copy_l
         ; test_case "transfern right" `Quick test_pattern_transfern_r
         ; test_case "transfern left" `Quick test_pattern_transfern_l
+        ; test_case "scan1r" `Quick test_pattern_scan1r
+        ; test_case "scan1l" `Quick test_pattern_scan1l
+        ; test_case "scann right" `Quick test_pattern_scann_r
+        ; test_case "scann left" `Quick test_pattern_scann_l
         ; test_case "call" `Quick test_pattern_call
         ] )
     ; ( "folding"
