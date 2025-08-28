@@ -129,7 +129,7 @@ let exec_instr t = function
     Tape.set t.memory 0;
     advance t
   | '\x09' ->
-    (* TransferR: move current cell value to right cell, zero current *)
+    (* Transfer1R: move current cell value to right cell, zero current *)
     op_transfer t |> advance
   | '\x0A' ->
     (* Add1 *)
@@ -148,7 +148,7 @@ let exec_instr t = function
     Tape.move_exn t.memory (-1);
     advance t
   | '\x0E' ->
-    (* TransferL: move current cell value to left cell, zero current *)
+    (* Transfer1L: move current cell value to left cell, zero current *)
     op_transfer ~pos:(-1) t |> advance
   | _ ->
     (* Unknown opcode: treat as no-op advance *)

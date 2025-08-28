@@ -159,8 +159,8 @@ let optimize_pattern instructions =
       :: Instr Sub1
       :: CloseLoop
       :: rest ->
-      (* optimized [>+<-] or [->+<] -> TransferR *)
-      optimize (Instr TransferR :: acc) rest
+      (* optimized [>+<-] or [->+<] -> Transfer1R *)
+      optimize (Instr Transfer1R :: acc) rest
     | OpenLoop
       :: Instr Sub1
       :: Instr Move1L
@@ -175,8 +175,8 @@ let optimize_pattern instructions =
       :: Instr Sub1
       :: CloseLoop
       :: rest ->
-      (* optimized [<+>-] or [-<+>] -> TransferL *)
-      optimize (Instr TransferL :: acc) rest
+      (* optimized [<+>-] or [-<+>] -> Transfer1L *)
+      optimize (Instr Transfer1L :: acc) rest
     | OpenLoop :: OpenLoop :: OpenLoop :: CloseLoop :: CloseLoop :: CloseLoop :: rest ->
       (* [[[]]] pattern: runtime Call extension *)
       optimize (Instr Call :: acc) rest
