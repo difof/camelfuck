@@ -131,7 +131,12 @@ let run_optimized program =
   program
   |> compile
   |> map_error ~f:(fun err -> CompileError err)
-  >>= fun program -> create program |> run |> map_error ~f:(fun err -> VMError err)
+  >>= fun bytecode ->
+  Out_channel.printf
+    "Program size %d bytes -> compiled %d bytes\n"
+    (String.length program)
+    (Bytes.length bytecode);
+  create bytecode |> run |> map_error ~f:(fun err -> VMError err)
 ;;
 
 let run_raw program =
