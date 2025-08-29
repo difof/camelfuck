@@ -223,6 +223,26 @@ let test_pattern_addat_no_match () =
   Alcotest.(check (list string)) "addat no match" expected_s actual_s
 ;;
 
+let test_pattern_multransfer_r () =
+  (* [->+>>+>++<<<<] and [>+>>+>++<<<<-] -> MulTransfer [(1,1);(3,1);(4,2)] *)
+  expect_pattern
+    "multransfer right (leading -)"
+    "[->+>>+>++<<<<]"
+    [ Instr (MulTransfer [ 1, 1; 3, 1; 4, 2 ]) ];
+  expect_pattern
+    "multransfer right (trailing -)"
+    "[>+>>+>++<<<<-]"
+    [ Instr (MulTransfer [ 1, 1; 3, 1; 4, 2 ]) ]
+;;
+
+let test_pattern_multransfer_l () =
+  (* mirror to the left: [<+<<+<++>>>>-] -> [(-1,1);(-3,1);(-4,2)] *)
+  expect_pattern
+    "multransfer left"
+    "[<+<<+<++>>>>-]"
+    [ Instr (MulTransfer [ -1, 1; -3, 1; -4, 2 ]) ]
+;;
+
 (* operation folding + encoding tests *)
 let bytes_to_list b =
   let len = Bytes.length b in
@@ -307,6 +327,8 @@ let () =
         ; test_case "addat + left" `Quick test_pattern_addat_add1_l
         ; test_case "addat +n left" `Quick test_pattern_addat_addn_l
         ; test_case "addat no match" `Quick test_pattern_addat_no_match
+        ; test_case "multransfer right" `Quick test_pattern_multransfer_r
+        ; test_case "multransfer left" `Quick test_pattern_multransfer_l
         ; test_case "call" `Quick test_pattern_call
         ] )
     ; ( "folding"
