@@ -190,6 +190,35 @@ let test_pattern_scan1l () = expect_pattern "scan1l" "[<]" [ Instr Scan1L ]
 let test_pattern_scann_r () = expect_pattern "scann right" "[>>]" [ Instr (ScanN 2) ]
 let test_pattern_scann_l () = expect_pattern "scann left" "[<<]" [ Instr (ScanN (-2)) ]
 
+let test_pattern_addat_add1_r () =
+  expect_pattern "addat + right" ">>+<<" [ Instr (AddAt (2, 1)) ]
+;;
+
+let test_pattern_addat_sub1_r () =
+  expect_pattern "addat - right" ">>-<<" [ Instr (AddAt (2, -1)) ]
+;;
+
+let test_pattern_addat_addn_r () =
+  expect_pattern "addat +n right" ">>+++<<" [ Instr (AddAt (2, 3)) ]
+;;
+
+let test_pattern_addat_add1_l () =
+  expect_pattern "addat + left" "<<+>>" [ Instr (AddAt (-2, 1)) ]
+;;
+
+let test_pattern_addat_addn_l () =
+  expect_pattern "addat +n left" "<<--->>" [ Instr (AddAt (-2, -3)) ]
+;;
+
+let test_pattern_addat_no_match () =
+  (* ">>+>>" should not fold into AddAt since distances don't cancel *)
+  let actual = parse_sequence ">>+>>" |> optimize_instructions |> optimize_pattern in
+  let expected = [ Instr (MoveN 2); Instr Add1; Instr (MoveN 2) ] in
+  let expected_s = List.map show_intermediate expected in
+  let actual_s = List.map show_intermediate actual in
+  Alcotest.(check (list string)) "addat no match" expected_s actual_s
+;;
+
 (* operation folding + encoding tests *)
 let bytes_to_list b =
   let len = Bytes.length b in
@@ -268,6 +297,12 @@ let () =
         ; test_case "scan1l" `Quick test_pattern_scan1l
         ; test_case "scann right" `Quick test_pattern_scann_r
         ; test_case "scann left" `Quick test_pattern_scann_l
+        ; test_case "addat + right" `Quick test_pattern_addat_add1_r
+        ; test_case "addat - right" `Quick test_pattern_addat_sub1_r
+        ; test_case "addat +n right" `Quick test_pattern_addat_addn_r
+        ; test_case "addat + left" `Quick test_pattern_addat_add1_l
+        ; test_case "addat +n left" `Quick test_pattern_addat_addn_l
+        ; test_case "addat no match" `Quick test_pattern_addat_no_match
         ; test_case "call" `Quick test_pattern_call
         ] )
     ; ( "folding"
