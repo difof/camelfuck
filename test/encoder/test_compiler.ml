@@ -164,7 +164,9 @@ let test_resolve_unmatched_open () =
 
 (* structural pattern optimization tests *)
 let expect_pattern name source expected =
-  let actual = parse_sequence source |> optimize_instructions |> optimize_pattern in
+  let actual =
+    parse_sequence source |> fuse_std_ops |> optimize_patterns |> optimize_single_ops
+  in
   let expected_s = List.map show_intermediate expected in
   let actual_s = List.map show_intermediate actual in
   Alcotest.(check (list string)) name expected_s actual_s
@@ -211,8 +213,10 @@ let test_pattern_addat_addn_l () =
 ;;
 
 let test_pattern_addat_no_match () =
-  (* ">>+>>" should not fold into AddAt since distances don't cancel *)
-  let actual = parse_sequence ">>+>>" |> optimize_instructions |> optimize_pattern in
+  (* " >>+>> " should not fold into AddAt since distances don't cancel *)
+  let actual =
+    parse_sequence ">>+>>" |> fuse_std_ops |> optimize_patterns |> optimize_single_ops
+  in
   let expected = [ Instr (MoveN 2); Instr Add1; Instr (MoveN 2) ] in
   let expected_s = List.map show_intermediate expected in
   let actual_s = List.map show_intermediate actual in
@@ -287,7 +291,7 @@ let () =
         ; test_case "unmatched close" `Quick test_resolve_unmatched_close
         ; test_case "unmatched open" `Quick test_resolve_unmatched_open
         ] )
-    ; ( "optimize_pattern"
+    ; ( "optimize_patterns"
       , [ test_case "setzero" `Quick test_pattern_setzero
         ; test_case "transfer1r" `Quick test_pattern_copy
         ; test_case "transfer1l" `Quick test_pattern_copy_l
