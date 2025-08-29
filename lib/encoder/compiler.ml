@@ -116,47 +116,79 @@ let fuse_std_ops instructions =
 
 let optimize_patterns instructions =
   let open Instruction in
+  (* Try matching a multiplication transfer loop: zero source, distribute to offsets, return to origin *)
+  let try_multransfer =
+    let add_or_update pairs delta coeff =
+      let rec loop acc = function
+        | [] -> List.rev ((delta, coeff) :: acc)
+        | (d, c) :: tl when d = delta -> List.rev_append acc ((d, c + coeff) :: tl)
+        | hd :: tl -> loop (hd :: acc) tl
+      in
+      loop [] pairs
+    in
+    let rec collect pairs seen_dec cur_off = function
+      | [] -> None
+      | OpenLoop :: _ -> None
+      | CloseLoop :: rest ->
+        if Int.( = ) cur_off 0 && seen_dec
+        then (
+          let nz = List.filter pairs ~f:(fun (_, c) -> c <> 0) in
+          match nz with
+          | [] -> None
+          | [ (_, 1) ] -> None
+          | _ -> Some (nz, rest))
+        else None
+      | Instr (MoveN d) :: tl -> collect pairs seen_dec (cur_off + d) tl
+      | Instr (AddN k) :: tl ->
+        if Int.( = ) cur_off 0
+        then if k = -1 && not seen_dec then collect pairs true cur_off tl else None
+        else collect (add_or_update pairs cur_off k) seen_dec cur_off tl
+      | _ :: _ -> None
+    in
+    function
+    | Instr (AddN _) :: _ as tl -> collect [] false 0 tl
+    | Instr (MoveN _) :: _ as tl -> collect [] false 0 tl
+    | CloseLoop :: _ -> None
+    | _ -> None
+  in
   let rec optimize acc = function
     | [] -> List.rev acc
-    | OpenLoop :: (Instr (AddN 1) | Instr (AddN -1)) :: CloseLoop :: rest ->
-      (* optimized [-] and [+] -> SetZero *)
-      optimize (Instr SetZero :: acc) rest
-    | Instr (AddN _) :: Instr SetZero :: rest ->
-      (* dead before SetZero *)
-      optimize (Instr SetZero :: acc) rest
-    | OpenLoop :: Instr (MoveN n) :: CloseLoop :: rest ->
-      (* [k</k>] *)
-      optimize (Instr (ScanN n) :: acc) rest
-    | OpenLoop
-      :: Instr (AddN n1)
-      :: Instr (MoveN n)
-      :: Instr (AddN m1)
-      :: Instr (MoveN m)
-      :: CloseLoop
-      :: rest
-      when n1 = -1 && m1 = 1 && n <> 0 && m = -n ->
-      (* [ - k</> + k>/< ] TransferN to left/right *)
-      optimize (Instr (TransferN n) :: acc) rest
-    | OpenLoop
-      :: Instr (MoveN n)
-      :: Instr (AddN m1)
-      :: Instr (MoveN m)
-      :: Instr (AddN n1)
-      :: CloseLoop
-      :: rest
-      when m1 = 1 && n1 = -1 && n <> 0 && m = -n ->
-      (* [ k</> + k>/< - ] TransferN to left/right *)
-      optimize (Instr (TransferN n) :: acc) rest
+    | OpenLoop :: tl ->
+      (match try_multransfer tl with
+       | Some (pairs, rest) -> optimize (Instr (MulTransfer pairs) :: acc) rest
+       | None ->
+         (match tl with
+          | OpenLoop :: OpenLoop :: CloseLoop :: CloseLoop :: CloseLoop :: rest ->
+            optimize (Instr Call :: acc) rest
+          | CloseLoop :: rest | OpenLoop :: CloseLoop :: CloseLoop :: rest ->
+            optimize (Instr Hang :: acc) rest
+          | Instr (AddN 1) :: CloseLoop :: rest -> optimize (Instr SetZero :: acc) rest
+          | Instr (AddN -1) :: CloseLoop :: rest -> optimize (Instr SetZero :: acc) rest
+          | Instr (MoveN n) :: CloseLoop :: rest ->
+            (* [k</k>] *)
+            optimize (Instr (ScanN n) :: acc) rest
+          | Instr (AddN n1)
+            :: Instr (MoveN n)
+            :: Instr (AddN m1)
+            :: Instr (MoveN m)
+            :: CloseLoop
+            :: rest
+            when n1 = -1 && m1 = 1 && n <> 0 && m = -n ->
+            (* [ - k</> + k>/< ] TransferN to left/right *)
+            optimize (Instr (TransferN n) :: acc) rest
+          | Instr (MoveN n)
+            :: Instr (AddN m1)
+            :: Instr (MoveN m)
+            :: Instr (AddN n1)
+            :: CloseLoop
+            :: rest
+            when m1 = 1 && n1 = -1 && n <> 0 && m = -n ->
+            (* [ k</> + k>/< - ] TransferN to left/right *)
+            optimize (Instr (TransferN n) :: acc) rest
+          | _ -> optimize (OpenLoop :: acc) tl))
     | Instr (MoveN d1) :: Instr (AddN n) :: Instr (MoveN d2) :: rest when d1 = -d2 ->
       (* k>k+k< *)
       optimize (Instr (AddAt (d1, n)) :: acc) rest
-    | OpenLoop :: OpenLoop :: OpenLoop :: CloseLoop :: CloseLoop :: CloseLoop :: rest ->
-      (* [[[]]] pattern: runtime Call extension *)
-      optimize (Instr Call :: acc) rest
-    | OpenLoop :: OpenLoop :: CloseLoop :: CloseLoop :: rest
-    | OpenLoop :: CloseLoop :: rest ->
-      (* [] and [[]] are infinite loops, we hang. [[[[]]]] and more we don't give a fuck. *)
-      optimize (Instr Hang :: acc) rest
     | instr :: rest -> optimize (instr :: acc) rest
   in
   fixed_point (fun instrs -> optimize [] instrs) instructions
