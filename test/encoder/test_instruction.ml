@@ -88,6 +88,21 @@ let test_scann () =
   expect_error "scann 128" (ScanN 128)
 ;;
 
+let test_addat () =
+  (* valid encodings *)
+  expect_ok "addat (0,0)" (AddAt (0, 0)) [ 0x13; 0x00; 0x00 ];
+  expect_ok "addat (2,1)" (AddAt (2, 1)) [ 0x13; 0x02; 0x01 ];
+  expect_ok "addat (-2,-1)" (AddAt (-2, -1)) [ 0x13; 0xFE; 0xFF ];
+  expect_ok "addat (-128,127)" (AddAt (-128, 127)) [ 0x13; 0x80; 0x7F ];
+  expect_ok "addat (127,-128)" (AddAt (127, -128)) [ 0x13; 0x7F; 0x80 ];
+  (* operand 1 out of bounds *)
+  expect_error "addat (128,0)" (AddAt (128, 0));
+  expect_error "addat (-129,0)" (AddAt (-129, 0));
+  (* operand 2 out of bounds *)
+  expect_error "addat (0,128)" (AddAt (0, 128));
+  expect_error "addat (0,-129)" (AddAt (0, -129))
+;;
+
 let () =
   let open Alcotest in
   run
@@ -97,6 +112,7 @@ let () =
         ; test_case "move" `Quick test_move
         ; test_case "transfern" `Quick test_transfern
         ; test_case "scann" `Quick test_scann
+        ; test_case "addat" `Quick test_addat
         ] )
     ; "jumps", [ test_case "jz" `Quick test_jz; test_case "jnz" `Quick test_jnz ]
     ; "no-arg ops", [ test_case "no-arg encodings" `Quick test_noarg ]
