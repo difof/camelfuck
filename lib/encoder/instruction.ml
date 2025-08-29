@@ -20,6 +20,7 @@ type t =
   | Scan1R
   | Scan1L
   | ScanN of int
+  | AddAt of int * int
 
 type error = OperandOutOfBounds of (t * int * int * int)
 
@@ -43,6 +44,7 @@ let pp_t fmt = function
   | Scan1R -> Format.fprintf fmt "scan1r"
   | Scan1L -> Format.fprintf fmt "scan1l"
   | ScanN n -> Format.fprintf fmt "scann(%d)" n
+  | AddAt (n, m) -> Format.fprintf fmt "addat(%d,%d)" n m
 ;;
 
 let pp_error fmt = function
@@ -52,6 +54,7 @@ let pp_error fmt = function
 
 let size = function
   | AddN _ | MoveN _ | TransferN _ | ScanN _ -> 2
+  | AddAt _ -> 3
   | Jz _ | Jnz _ -> 5
   | _ -> 1
 ;;
@@ -78,6 +81,7 @@ let to_char t =
   | Scan1R -> chr 0x10
   | Scan1L -> chr 0x11
   | ScanN _ -> chr 0x12
+  | AddAt (_, _) -> chr 0x13
 ;;
 
 let encode t =
@@ -88,12 +92,29 @@ let encode t =
     setter buffer 1 v;
     buffer
   in
-  let op_with_int8_arg t v =
+  let op_with_i8_arg t v =
     let min_v = -128 in
     let max_v = 127 in
     if v < min_v || v > max_v
     then Error (OperandOutOfBounds (t, v, min_v, max_v))
     else Ok (op_with_arg t (size t) Bytes.set_int8 v)
+  in
+  let op_with_i8_2_arg t (v1, v2) =
+    let min_v = -128 in
+    let max_v = 127 in
+    if v1 < min_v || v1 > max_v
+    then Error (OperandOutOfBounds (t, v1, min_v, max_v))
+    else if v2 < min_v || v2 > max_v
+    then Error (OperandOutOfBounds (t, v1, min_v, max_v))
+    else
+      Ok
+        (op_with_arg
+           t
+           (size t)
+           (fun buffer offset (v1, v2) ->
+              Bytes.set_int8 buffer offset v1;
+              Bytes.set_int8 buffer (offset + 1) v2)
+           (v1, v2))
   in
   let op_with_int32_arg t v =
     let min_v = Int32.min_int |> Int32.to_int in
@@ -103,7 +124,8 @@ let encode t =
     else Ok (op_with_arg t (size t) Bytes.set_int32_le @@ Int32.of_int v)
   in
   match t with
-  | AddN n | MoveN n | TransferN n | ScanN n -> op_with_int8_arg t n
+  | AddN n | MoveN n | TransferN n | ScanN n -> op_with_i8_arg t n
+  | AddAt (d, n) -> op_with_i8_2_arg t (d, n)
   | Jz rel_pos | Jnz rel_pos -> op_with_int32_arg t rel_pos
   | _ -> op_no_arg t
 ;;

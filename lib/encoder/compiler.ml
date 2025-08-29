@@ -203,6 +203,15 @@ let optimize_pattern instructions =
       when n <> 0 && m = -n ->
       (* [k</>+k>/<-] or [-k</>+k>/<] TransferN to left/right *)
       optimize (Instr (TransferN n) :: acc) rest
+    | Instr (MoveN d1) :: Instr Add1 :: Instr (MoveN d2) :: rest when d1 = -d2 ->
+      (* k>+k< *)
+      optimize (Instr (AddAt (d1, 1)) :: acc) rest
+    | Instr (MoveN d1) :: Instr Sub1 :: Instr (MoveN d2) :: rest when d1 = -d2 ->
+      (* k>-k< *)
+      optimize (Instr (AddAt (d1, -1)) :: acc) rest
+    | Instr (MoveN d1) :: Instr (AddN n) :: Instr (MoveN d2) :: rest when d1 = -d2 ->
+      (* k>k+k< *)
+      optimize (Instr (AddAt (d1, n)) :: acc) rest
     | OpenLoop :: OpenLoop :: OpenLoop :: CloseLoop :: CloseLoop :: CloseLoop :: rest ->
       (* [[[]]] pattern: runtime Call extension *)
       optimize (Instr Call :: acc) rest
