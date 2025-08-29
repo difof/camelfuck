@@ -114,9 +114,24 @@ module Brainfuck = struct
   ;;
 end
 
+type optimized_error =
+  | CompileError of Encoder.Compiler.error
+  | VMError of Runtime.Vm.error
+
+let pp_optimized_error fmt = function
+  | CompileError err ->
+    Format.fprintf fmt "compile error: %a" Encoder.Compiler.pp_error err
+  | VMError err -> Format.fprintf fmt "VM error: %a" Runtime.Vm.pp_error err
+;;
+
 let run_optimized program =
-  Encoder.Compiler.compile program
-  |> Result.map ~f:(fun program -> Runtime.Vm.create program |> Runtime.Vm.run)
+  let open Result in
+  let open Encoder.Compiler in
+  let open Runtime.Vm in
+  program
+  |> compile
+  |> map_error ~f:(fun err -> CompileError err)
+  >>= fun program -> create program |> run |> map_error ~f:(fun err -> VMError err)
 ;;
 
 let run_raw program =
@@ -166,7 +181,12 @@ let () =
   let mode, program = parse_mode_and_program () in
   match mode with
   | Raw -> run_raw program
-  | Optimized -> run_optimized program |> ignore
+  | Optimized ->
+    (match run_optimized program with
+     | Ok _ -> ()
+     | Error err ->
+       Format.eprintf "error: %a@\n" pp_optimized_error err;
+       exit 1)
 ;;
 
 (*
