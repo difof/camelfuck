@@ -21,6 +21,7 @@ type t =
   | Scan1L
   | ScanN of int
   | AddAt of int * int
+  | MulTransfer of (int * int) list
 
 type error = OperandOutOfBounds of (t * int * int * int)
 
@@ -45,6 +46,13 @@ let pp_t fmt = function
   | Scan1L -> Format.fprintf fmt "scan1l"
   | ScanN n -> Format.fprintf fmt "scann(%d)" n
   | AddAt (n, m) -> Format.fprintf fmt "addat(%d,%d)" n m
+  | MulTransfer pairs ->
+    let rec pp_pairs fmt = function
+      | [] -> ()
+      | [ (d, c) ] -> Format.fprintf fmt "(%d,%d)" d c
+      | (d, c) :: tl -> Format.fprintf fmt "(%d,%d);%a" d c pp_pairs tl
+    in
+    Format.fprintf fmt "multransfer[%a]" pp_pairs pairs
 ;;
 
 let pp_error fmt = function
@@ -56,6 +64,7 @@ let size = function
   | AddN _ | MoveN _ | TransferN _ | ScanN _ -> 2
   | AddAt _ -> 3
   | Jz _ | Jnz _ -> 5
+  | MulTransfer pairs -> 2 + (2 * List.length pairs)
   | _ -> 1
 ;;
 
@@ -82,6 +91,7 @@ let to_char t =
   | Scan1L -> chr 0x11
   | ScanN _ -> chr 0x12
   | AddAt (_, _) -> chr 0x13
+  | MulTransfer _ -> chr 0x14
 ;;
 
 let encode t =
@@ -127,5 +137,46 @@ let encode t =
   | AddN n | MoveN n | TransferN n | ScanN n -> op_with_i8_arg t n
   | AddAt (d, n) -> op_with_i8_2_arg t (d, n)
   | Jz rel_pos | Jnz rel_pos -> op_with_int32_arg t rel_pos
+  | MulTransfer pairs ->
+    let count = List.length pairs in
+    if count < 0 || count > 127
+    then Error (OperandOutOfBounds (t, count, 0, 127))
+    else (
+      (* variable-length: opcode, count, then (delta, coeff)* *)
+      let total = size t in
+      let buffer = op t total in
+      Bytes.set_uint8 buffer 1 count;
+      let rec write idx = function
+        | [] -> ()
+        | (d, c) :: tl ->
+          let min_v = -128 in
+          let max_v = 127 in
+          if d < min_v || d > max_v
+          then raise (Invalid_argument "multransfer dest out of bounds")
+          else if c < min_v || c > max_v
+          then raise (Invalid_argument "multransfer coeff out of bounds")
+          else (
+            Bytes.set_int8 buffer idx d;
+            Bytes.set_int8 buffer (idx + 1) c;
+            write (idx + 2) tl)
+      in
+      try
+        write 2 pairs;
+        Ok buffer
+      with
+      | Invalid_argument _ ->
+        (* map to OperandOutOfBounds using first offending value we can detect by re-checking *)
+        let rec find_bad = function
+          | [] -> None
+          | (d, c) :: tl ->
+            if d < -128 || d > 127
+            then Some d
+            else if c < -128 || c > 127
+            then Some c
+            else find_bad tl
+        in
+        (match find_bad pairs with
+         | Some bad -> Error (OperandOutOfBounds (t, bad, -128, 127))
+         | None -> Error (OperandOutOfBounds (t, 0, -128, 127))))
   | _ -> op_no_arg t
 ;;
