@@ -188,6 +188,31 @@ let exec_instr t = function
     Tape.set t.memory (Tape.get t.memory + n);
     Tape.move_exn t.memory (-delta);
     advance t ~n:3
+  | '\x14' ->
+    (* MulTransfer: count followed by (delta, coeff) pairs; zeroes source *)
+    ensure_can_read t 1;
+    let count = Bytes.unsafe_get t.code (t.pc + 1) |> Char.code in
+    let total_pairs_bytes = count * 2 in
+    ensure_can_read t (1 + total_pairs_bytes);
+    let source_value = Tape.get t.memory in
+    if source_value <> 0
+    then (
+      Tape.set t.memory 0;
+      let rec apply idx remaining =
+        if remaining = 0
+        then ()
+        else (
+          let d = Bytes.unsafe_get t.code (t.pc + idx) |> Char.code |> ensure_i8_sign in
+          let c =
+            Bytes.unsafe_get t.code (t.pc + idx + 1) |> Char.code |> ensure_i8_sign
+          in
+          Tape.move_exn t.memory d;
+          Tape.set t.memory (Tape.get t.memory + (source_value * c));
+          Tape.move_exn t.memory (-d);
+          apply (idx + 2) (remaining - 1))
+      in
+      apply 2 count);
+    advance t ~n:(2 + total_pairs_bytes)
   | op -> raise (VMExn (InvalidInstruction op))
 ;;
 
