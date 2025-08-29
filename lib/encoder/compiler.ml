@@ -87,21 +87,16 @@ let rec fixed_point f x =
   if Poly.( = ) x x' then x else fixed_point f x'
 ;;
 
-(* apply micro optimizations on intermediate tokens *)
-let optimize_instructions instructions =
+let fuse_std_ops instructions =
   let open Instruction in
-  let rec chunkify acc sum i_multiple i_neg i_pos =
+  let rec chunkify acc sum ctor =
     let v_min = -128 in
     let v_max = 127 in
     match sum with
     | 0 -> acc
-    | 1 -> i_pos :: acc
-    | -1 -> i_neg :: acc
-    | v when v > v_max ->
-      chunkify (i_multiple v_max :: acc) (v - v_max) i_multiple i_neg i_pos
-    | v when v < v_min ->
-      chunkify (i_multiple v_min :: acc) (v - v_min) i_multiple i_neg i_pos
-    | v -> i_multiple v :: acc
+    | v when v > v_max -> chunkify (ctor v_max :: acc) (v - v_max) ctor
+    | v when v < v_min -> chunkify (ctor v_min :: acc) (v - v_min) ctor
+    | v -> ctor v :: acc
   in
   let rec optimize acc = function
     | [] -> List.rev acc
@@ -109,106 +104,49 @@ let optimize_instructions instructions =
       (* this should never happen but we use it anyways *)
       optimize acc rest
     | Instr (AddN n) :: Instr (AddN m) :: rest ->
-      let acc =
-        chunkify acc (n + m) (fun v -> Instr (AddN v)) (Instr Sub1) (Instr Add1)
-      in
+      let acc = chunkify acc (n + m) (fun v -> Instr (AddN v)) in
       optimize acc rest
     | Instr (MoveN n) :: Instr (MoveN m) :: rest ->
-      let acc =
-        chunkify acc (n + m) (fun v -> Instr (MoveN v)) (Instr Move1L) (Instr Move1R)
-      in
+      let acc = chunkify acc (n + m) (fun v -> Instr (MoveN v)) in
       optimize acc rest
-    | Instr Move1L :: Instr Move1R :: rest | Instr Move1R :: Instr Move1L :: rest ->
-      (* right then left with equal magnitude cancels out, requires running again *)
-      optimize acc rest
-    | Instr Add1 :: Instr Sub1 :: rest | Instr Sub1 :: Instr Add1 :: rest ->
-      (* +n followed by -n cancels out, requires running again *)
-      optimize acc rest
-    | Instr (AddN 1) :: rest -> optimize (Instr Add1 :: acc) rest
-    | Instr (AddN -1) :: rest -> optimize (Instr Sub1 :: acc) rest
-    | Instr (MoveN 1) :: rest -> optimize (Instr Move1R :: acc) rest
-    | Instr (MoveN -1) :: rest -> optimize (Instr Move1L :: acc) rest
     | instr :: rest -> optimize (instr :: acc) rest
   in
-  (* iterate optimization to a fixed point (as many times as needed until nothing changes) *)
   fixed_point (fun instrs -> optimize [] instrs) instructions
 ;;
 
-(* detect common patterns structurally on loops and replace with specialized instructions *)
-let optimize_pattern instructions =
+let optimize_patterns instructions =
   let open Instruction in
   let rec optimize acc = function
     | [] -> List.rev acc
-    | OpenLoop :: (Instr Add1 | Instr Sub1) :: CloseLoop :: rest ->
+    | OpenLoop :: (Instr (AddN 1) | Instr (AddN -1)) :: CloseLoop :: rest ->
       (* optimized [-] and [+] -> SetZero *)
       optimize (Instr SetZero :: acc) rest
-    | (Instr Add1 | Instr Sub1 | Instr (AddN _)) :: Instr SetZero :: rest ->
+    | Instr (AddN _) :: Instr SetZero :: rest ->
       (* dead before SetZero *)
       optimize (Instr SetZero :: acc) rest
-    | OpenLoop :: Instr Move1R :: CloseLoop :: rest ->
-      (* [>] *)
-      optimize (Instr Scan1R :: acc) rest
-    | OpenLoop :: Instr Move1L :: CloseLoop :: rest ->
-      (* [<] *)
-      optimize (Instr Scan1L :: acc) rest
     | OpenLoop :: Instr (MoveN n) :: CloseLoop :: rest ->
       (* [k</k>] *)
       optimize (Instr (ScanN n) :: acc) rest
     | OpenLoop
-      :: Instr Sub1
-      :: Instr Move1R
-      :: Instr Add1
-      :: Instr Move1L
-      :: CloseLoop
-      :: rest
-    | OpenLoop
-      :: Instr Move1R
-      :: Instr Add1
-      :: Instr Move1L
-      :: Instr Sub1
-      :: CloseLoop
-      :: rest ->
-      (* optimized [>+<-] or [->+<] -> Transfer1R *)
-      optimize (Instr Transfer1R :: acc) rest
-    | OpenLoop
-      :: Instr Sub1
-      :: Instr Move1L
-      :: Instr Add1
-      :: Instr Move1R
-      :: CloseLoop
-      :: rest
-    | OpenLoop
-      :: Instr Move1L
-      :: Instr Add1
-      :: Instr Move1R
-      :: Instr Sub1
-      :: CloseLoop
-      :: rest ->
-      (* optimized [<+>-] or [-<+>] -> Transfer1L *)
-      optimize (Instr Transfer1L :: acc) rest
-    | OpenLoop
-      :: Instr Sub1
+      :: Instr (AddN n1)
       :: Instr (MoveN n)
-      :: Instr Add1
+      :: Instr (AddN m1)
       :: Instr (MoveN m)
       :: CloseLoop
       :: rest
-    | OpenLoop
-      :: Instr (MoveN n)
-      :: Instr Add1
-      :: Instr (MoveN m)
-      :: Instr Sub1
-      :: CloseLoop
-      :: rest
-      when n <> 0 && m = -n ->
-      (* [k</>+k>/<-] or [-k</>+k>/<] TransferN to left/right *)
+      when n1 = -1 && m1 = 1 && n <> 0 && m = -n ->
+      (* [ - k</> + k>/< ] TransferN to left/right *)
       optimize (Instr (TransferN n) :: acc) rest
-    | Instr (MoveN d1) :: Instr Add1 :: Instr (MoveN d2) :: rest when d1 = -d2 ->
-      (* k>+k< *)
-      optimize (Instr (AddAt (d1, 1)) :: acc) rest
-    | Instr (MoveN d1) :: Instr Sub1 :: Instr (MoveN d2) :: rest when d1 = -d2 ->
-      (* k>-k< *)
-      optimize (Instr (AddAt (d1, -1)) :: acc) rest
+    | OpenLoop
+      :: Instr (MoveN n)
+      :: Instr (AddN m1)
+      :: Instr (MoveN m)
+      :: Instr (AddN n1)
+      :: CloseLoop
+      :: rest
+      when m1 = 1 && n1 = -1 && n <> 0 && m = -n ->
+      (* [ k</> + k>/< - ] TransferN to left/right *)
+      optimize (Instr (TransferN n) :: acc) rest
     | Instr (MoveN d1) :: Instr (AddN n) :: Instr (MoveN d2) :: rest when d1 = -d2 ->
       (* k>k+k< *)
       optimize (Instr (AddAt (d1, n)) :: acc) rest
@@ -222,6 +160,22 @@ let optimize_pattern instructions =
     | instr :: rest -> optimize (instr :: acc) rest
   in
   fixed_point (fun instrs -> optimize [] instrs) instructions
+;;
+
+let optimize_single_ops instructions =
+  let rec optimize acc = function
+    | [] -> List.rev acc
+    | Instr (AddN 1) :: rest -> optimize (Instr Add1 :: acc) rest
+    | Instr (AddN -1) :: rest -> optimize (Instr Sub1 :: acc) rest
+    | Instr (MoveN 1) :: rest -> optimize (Instr Move1R :: acc) rest
+    | Instr (MoveN -1) :: rest -> optimize (Instr Move1L :: acc) rest
+    | Instr (TransferN 1) :: rest -> optimize (Instr Transfer1R :: acc) rest
+    | Instr (TransferN -1) :: rest -> optimize (Instr Transfer1L :: acc) rest
+    | Instr (ScanN 1) :: rest -> optimize (Instr Scan1R :: acc) rest
+    | Instr (ScanN -1) :: rest -> optimize (Instr Scan1L :: acc) rest
+    | instr :: rest -> optimize (instr :: acc) rest
+  in
+  optimize [] instructions
 ;;
 
 let bind_instruction_offsets instructions =
@@ -310,8 +264,9 @@ let compile source =
   let open Result in
   source
   |> parse_sequence
-  |> optimize_instructions
-  |> optimize_pattern
+  |> fuse_std_ops
+  |> optimize_patterns
+  |> optimize_single_ops
   |> bind_instruction_offsets
   |> resolve_jumps
   >>= encode_to_bytes

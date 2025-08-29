@@ -19,8 +19,9 @@ val pp_intermediate_instr_w_offset
   -> unit
 
 val parse_sequence : string -> intermediate_instr list
-val optimize_instructions : intermediate_instr list -> intermediate_instr list
-val optimize_pattern : intermediate_instr list -> intermediate_instr list
+val fuse_std_ops : intermediate_instr list -> intermediate_instr list
+val optimize_patterns : intermediate_instr list -> intermediate_instr list
+val optimize_single_ops : intermediate_instr list -> intermediate_instr list
 val bind_instruction_offsets : intermediate_instr list -> intermediate_instr_w_offset list
 val resolve_jumps : intermediate_instr_w_offset list -> (Instruction.t list, error) result
 val encode_to_bytes : Instruction.t list -> (bytes list, error) result
