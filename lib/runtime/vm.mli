@@ -1,6 +1,7 @@
 type t
 
 type error =
+  | InvalidInstruction of char
   | BytecodeOutOfBounds of int
   | JumpOutOfBounds of int
   | TapeError of Tape.error

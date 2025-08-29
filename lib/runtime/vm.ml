@@ -11,12 +11,14 @@ type t =
   }
 
 type error =
+  | InvalidInstruction of char
   | BytecodeOutOfBounds of int
   | JumpOutOfBounds of int
   | TapeError of Tape.error
   | Exception of exn
 
 let pp_error fmt = function
+  | InvalidInstruction op -> Format.fprintf fmt "Invalid instruction: %x" (Char.code op)
   | BytecodeOutOfBounds pos ->
     Format.fprintf fmt "Bytecode out of bounds at position %d" pos
   | JumpOutOfBounds pos -> Format.fprintf fmt "Jump out of bounds to position %d" pos
@@ -79,10 +81,18 @@ let[@inline] ensure_pc_bounds t pos =
   if pos < 0 || pos > t.code_length then raise (VMExn (JumpOutOfBounds pos)) else t
 ;;
 
+let[@inline] ensure_i8_sign v = if v >= 128 then v - 256 else v
+
 let[@inline] read_imm_i8 t =
   ensure_can_read t 1;
-  let c = Bytes.unsafe_get t.code (t.pc + 1) |> Char.code in
-  if c >= 128 then c - 256 else c
+  ensure_i8_sign (Bytes.unsafe_get t.code (t.pc + 1) |> Char.code)
+;;
+
+let[@inline] read_imm_i8_2 t =
+  ensure_can_read t 2;
+  let b1 = Bytes.unsafe_get t.code (t.pc + 1) |> Char.code in
+  let b2 = Bytes.unsafe_get t.code (t.pc + 2) |> Char.code in
+  ensure_i8_sign b1, ensure_i8_sign b2
 ;;
 
 let[@inline] read_imm_i32 t =
@@ -95,15 +105,15 @@ let exec_instr t = function
     (* Hang *)
     hang t
   | '\x01' ->
-    (* AddN imm8: size 2 *)
+    (* AddN imm8 *)
     Tape.set t.memory (Tape.get t.memory + read_imm_i8 t);
     advance t ~n:2
   | '\x02' ->
-    (* MoveN imm8: size 2 *)
+    (* MoveN imm8 *)
     Tape.move_exn t.memory (read_imm_i8 t);
     advance t ~n:2
   | '\x03' ->
-    (* Jz imm32: size 5, relative to current pc *)
+    (* Jz imm32 *)
     if Tape.get t.memory = 0
     then (
       let rel = read_imm_i32 t in
@@ -111,7 +121,7 @@ let exec_instr t = function
       ensure_pc_bounds t new_pc |> advance ~replace:new_pc)
     else advance t ~n:5
   | '\x04' ->
-    (* Jnz imm32: size 5, relative to current pc *)
+    (* Jnz imm32 *)
     if Tape.get t.memory <> 0
     then (
       let rel = read_imm_i32 t in
@@ -136,7 +146,7 @@ let exec_instr t = function
     Tape.set t.memory 0;
     advance t
   | '\x09' ->
-    (* Transfer1R: move current cell value to right cell, zero current *)
+    (* Transfer1R *)
     op_transfer t |> advance
   | '\x0A' ->
     (* Add1 *)
@@ -155,10 +165,10 @@ let exec_instr t = function
     Tape.move_exn t.memory (-1);
     advance t
   | '\x0E' ->
-    (* Transfer1L: move current cell value to left cell, zero current *)
+    (* Transfer1L *)
     op_transfer ~pos:(-1) t |> advance
   | '\x0F' ->
-    (* TransferN: move current cell value by N cell, zero current *)
+    (* TransferN imm8 *)
     let n = read_imm_i8 t in
     op_transfer ~pos:n t |> advance ~n:2
   | '\x10' ->
@@ -170,10 +180,15 @@ let exec_instr t = function
   | '\x12' ->
     (* ScanN imm8 *)
     let n = read_imm_i8 t in
-    op_scan ~stride:n t |> advance
-  | _ ->
-    (* Unknown opcode: treat as no-op advance *)
-    advance t
+    op_scan ~stride:n t |> advance ~n:2
+  | '\x13' ->
+    (* AddAt imm8 imm8 *)
+    let delta, n = read_imm_i8_2 t in
+    Tape.move_exn t.memory delta;
+    Tape.set t.memory (Tape.get t.memory + n);
+    Tape.move_exn t.memory (-delta);
+    advance t ~n:3
+  | op -> raise (VMExn (InvalidInstruction op))
 ;;
 
 let rec run_exn t =
