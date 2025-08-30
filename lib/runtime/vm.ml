@@ -195,9 +195,8 @@ let exec_instr t = function
     then (
       Tape.set t.memory 0;
       let rec apply idx remaining =
-        if remaining = 0
-        then ()
-        else (
+        if remaining <> 0
+        then (
           let d = Bytes.unsafe_get t.code (t.pc + idx) |> Char.code |> ensure_i8_sign in
           let c =
             Bytes.unsafe_get t.code (t.pc + idx + 1) |> Char.code |> ensure_i8_sign
