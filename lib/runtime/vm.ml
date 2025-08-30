@@ -1,4 +1,4 @@
-open Core
+(* open Core *)
 open Stdlib
 open Stdio
 open Encoder.Instruction
@@ -31,7 +31,7 @@ let pp_error fmt = function
 
 exception VMExn of error
 
-let[@inline] ensure_bounds code code_length pos needed =
+let[@inline] ensure_bounds _ code_length pos needed =
   let last = pos + needed in
   if last >= code_length then raise (VMExn (BytecodeOutOfBounds last))
 ;;
