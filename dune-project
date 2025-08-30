@@ -23,3 +23,9 @@
 
 (package
  (name runtime))
+
+(package
+ (name isa))
+
+(package
+ (name compiler))
