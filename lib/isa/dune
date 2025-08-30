@@ -1,0 +1,5 @@
+(library
+ (name isa)
+ (public_name isa)
+ (wrapped false)
+ (libraries core))
