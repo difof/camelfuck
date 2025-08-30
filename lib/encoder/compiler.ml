@@ -136,7 +136,12 @@ let optimize_patterns instructions =
           match nz with
           | [] -> None
           | [ (_, 1) ] -> None
-          | _ -> Some (nz, rest))
+          | _ ->
+            let merged =
+              nz |> List.sort ~compare:(fun (d1, _) (d2, _) -> Int.compare d1 d2)
+              (* already merged by add_or_update; sort is enough *)
+            in
+            Some (merged, rest))
         else None
       | Instr (MoveN d) :: tl -> collect pairs seen_dec (cur_off + d) tl
       | Instr (AddN k) :: tl ->
