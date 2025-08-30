@@ -115,33 +115,32 @@ module Brainfuck = struct
 end
 
 type optimized_error =
-  | CompileError of Encoder.Compiler.error
-  | VMError of Runtime.Vm.error
+  | CompileError of Compiler.error
+  | VMError of Runtime.Isa_vm.error
 
 let pp_optimized_error fmt = function
-  | CompileError err ->
-    Format.fprintf fmt "compile error: %a" Encoder.Compiler.pp_error err
-  | VMError err -> Format.fprintf fmt "VM error: %a" Runtime.Vm.pp_error err
+  | CompileError err -> Format.fprintf fmt "compile error: %a" Compiler.pp_error err
+  | VMError err -> Format.fprintf fmt "VM error: %a" Runtime.Isa_vm.pp_error err
 ;;
 
-let run_optimized program =
+let run_optimized source =
   let open Result in
-  let open Encoder.Compiler in
-  let open Runtime.Vm in
+  let open Compiler in
+  let open Runtime.Isa_vm in
   let start = Time_ns.now () in
-  program
-  |> compile
+  source
+  |> full_pass
   |> map_error ~f:(fun err -> CompileError err)
-  >>= fun bytecode ->
-  let vm = create bytecode in
+  >>= fun program ->
+  let vm = create ~memory:(Tape.create 16000) program in
   let end_prep = Time_ns.diff (Time_ns.now ()) start in
   let start = Time_ns.now () in
   let result = vm |> run |> map_error ~f:(fun err -> VMError err) in
   let end_run = Time_ns.diff (Time_ns.now ()) start in
   Out_channel.printf
-    "Program size %d bytes -> compiled %d bytes\n"
-    (String.length program)
-    (Bytes.length bytecode);
+    "Program size %d instructions -> compiled %d instructions\n"
+    (String.length source)
+    (List.length program);
   Out_channel.printf
     "Took %s to preload and %s to run\n"
     (Time_ns.Span.to_string end_prep)
