@@ -240,7 +240,7 @@ let test_pattern_multransfer_l () =
   expect_pattern
     "multransfer left"
     "[<+<<+<++>>>>-]"
-    [ Instr (MulTransfer [ -1, 1; -3, 1; -4, 2 ]) ]
+    [ Instr (MulTransfer [ -4, 2; -3, 1; -1, 1 ]) ]
 ;;
 
 (* operation folding + encoding tests *)
