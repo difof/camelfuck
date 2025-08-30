@@ -103,6 +103,41 @@ let[@inline] set t v =
   Bytes.unsafe_set t.buffer i @@ Stdlib.Char.unsafe_chr @@ mask v
 ;;
 
+let[@inline] add t v =
+  let i = physical_index t in
+  let v = (Stdlib.Char.code @@ Bytes.unsafe_get t.buffer i) + v in
+  Bytes.unsafe_set t.buffer i @@ Stdlib.Char.unsafe_chr @@ mask v
+;;
+
+let[@inline] set_at_offset_exn t delta v =
+  let idx = t.bias + t.pos + delta in
+  if idx < 0 || idx >= t.len then realloc_exn t idx;
+  Bytes.unsafe_set t.buffer idx @@ Stdlib.Char.unsafe_chr @@ mask v
+;;
+
+let[@inline] set_at_offset t delta v =
+  try
+    set_at_offset_exn t delta v;
+    Ok ()
+  with
+  | TapeExn err -> Error err
+;;
+
+let[@inline] add_at_offset_exn t delta v =
+  let idx = t.bias + t.pos + delta in
+  if idx < 0 || idx >= t.len then realloc_exn t idx;
+  let cur = Stdlib.Char.code @@ Bytes.unsafe_get t.buffer idx in
+  Bytes.unsafe_set t.buffer idx @@ Stdlib.Char.unsafe_chr @@ mask (cur + v)
+;;
+
+let[@inline] add_at_offset t delta v =
+  try
+    add_at_offset_exn t delta v;
+    Ok ()
+  with
+  | TapeExn err -> Error err
+;;
+
 let[@inline] len t = t.len
 let[@inline] bias t = t.bias
 let[@inline] logical_pos t = t.pos
