@@ -1,5 +1,10 @@
 (library
  (name runtime)
  (public_name runtime)
- (modules vm) ; handleman extcall)
- (libraries core tape encoder))
+ (modules vm isa_vm) ; handleman extcall)
+ (libraries core tape encoder isa compiler)
+ ; (instrumentation
+ ;  (backend landmarks))
+ ; (preprocess
+ ;  (pps landmarks-ppx --auto))
+ )
