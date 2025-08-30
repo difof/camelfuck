@@ -1,0 +1,4 @@
+(test
+ (name test_isa)
+ (libraries isa alcotest)
+ (modules test_isa))
