@@ -32,7 +32,7 @@ val get : t -> int
 (* Set the value of current Tape pointer masked by 0xFF *)
 val set : t -> int -> unit
 
-(* Add the given value to current cell at Tape pointer masked by 0xFF *)
+(* Add to current cell (masked) *)
 val add : t -> int -> unit
 
 (* Write at logical offset from current pointer without moving it (masked) *)

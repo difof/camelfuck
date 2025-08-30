@@ -105,8 +105,8 @@ let[@inline] set t v =
 
 let[@inline] add t v =
   let i = physical_index t in
-  let v = (Stdlib.Char.code @@ Bytes.unsafe_get t.buffer i) + v in
-  Bytes.unsafe_set t.buffer i @@ Stdlib.Char.unsafe_chr @@ mask v
+  let cur = Stdlib.Char.code @@ Bytes.unsafe_get t.buffer i in
+  Bytes.unsafe_set t.buffer i @@ Stdlib.Char.unsafe_chr @@ mask (cur + v)
 ;;
 
 let[@inline] set_at_offset_exn t delta v =
