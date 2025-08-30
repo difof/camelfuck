@@ -32,6 +32,17 @@ val get : t -> int
 (* Set the value of current Tape pointer masked by 0xFF *)
 val set : t -> int -> unit
 
+(* Add the given value to current cell at Tape pointer masked by 0xFF *)
+val add : t -> int -> unit
+
+(* Write at logical offset from current pointer without moving it (masked) *)
+val set_at_offset_exn : t -> int -> int -> unit
+val set_at_offset : t -> int -> int -> (unit, error) result
+
+(* Add a value at logical offset from current pointer without moving it (masked) *)
+val add_at_offset_exn : t -> int -> int -> unit
+val add_at_offset : t -> int -> int -> (unit, error) result
+
 (* Get the total length of the Tape *)
 val len : t -> int
 
