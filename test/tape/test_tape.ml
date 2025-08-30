@@ -16,6 +16,16 @@ let test_set_get () =
   Alcotest.(check int) "value wraps at 257" 1 (get tape)
 ;;
 
+let test_add () =
+  let tape = create ~max_size:4096 256 in
+  add tape 10;
+  Alcotest.(check int) "add increments" 10 (get tape);
+  add tape 5;
+  Alcotest.(check int) "add accumulates" 15 (get tape);
+  add tape 300;
+  Alcotest.(check int) "add wraps" 59 (get tape)
+;;
+
 let test_move_positive () =
   let tape = create ~max_size:4096 256 in
   (match move tape 5 with
@@ -152,6 +162,40 @@ let test_edge_positions () =
   Alcotest.(check int) "position -1 still has value 44" 44 (get tape)
 ;;
 
+let test_offset_set_add () =
+  let tape = create ~max_size:4096 256 in
+  set tape 7;
+  set_at_offset_exn tape 2 123;
+  Alcotest.(check int) "origin unchanged" 7 (get tape);
+  (match move tape 2 with
+   | Ok () -> ()
+   | Error _ -> Alcotest.fail "move should succeed");
+  Alcotest.(check int) "set_at_offset writes at +2" 123 (get tape);
+  (match move tape (-3) with
+   | Ok () -> ()
+   | Error _ -> Alcotest.fail "move should succeed");
+  Alcotest.(check int) "at -1 before set" 0 (get tape);
+  set_at_offset_exn tape 0 7;
+  set_at_offset_exn tape 1 0;
+  set_at_offset_exn tape (-1) 50;
+  (match move tape (-1) with
+   | Ok () -> ()
+   | Error _ -> Alcotest.fail "move should succeed");
+  Alcotest.(check int) "set_at_offset writes at -1" 50 (get tape)
+;;
+
+let test_offset_add_at_offset () =
+  let tape = create ~max_size:4096 256 in
+  add_at_offset_exn tape 1 10;
+  add_at_offset_exn tape 1 5;
+  (match move tape 1 with
+   | Ok () -> ()
+   | Error _ -> Alcotest.fail "move should succeed");
+  Alcotest.(check int) "add_at_offset accumulates" 15 (get tape);
+  add_at_offset_exn tape 0 300;
+  Alcotest.(check int) "add_at_offset wraps at current cell" 59 (get tape)
+;;
+
 let test_error_cases () =
   let tape = create ~max_size:512 10 in
   match move tape 5000 with
@@ -168,6 +212,7 @@ let () =
     [ ( "basic"
       , [ test_case "create" `Quick test_create
         ; test_case "set and get" `Quick test_set_get
+        ; test_case "add" `Quick test_add
         ] )
     ; ( "movement"
       , [ test_case "move positive" `Quick test_move_positive
@@ -175,6 +220,10 @@ let () =
         ; test_case "move across zero" `Quick test_move_across_zero
         ; test_case "large moves" `Quick test_large_moves
         ; test_case "edge positions (-1, 0, 1)" `Quick test_edge_positions
+        ] )
+    ; ( "offset ops"
+      , [ test_case "set_at_offset and origin" `Quick test_offset_set_add
+        ; test_case "add_at_offset" `Quick test_offset_add_at_offset
         ] )
     ; "memory", [ test_case "reallocation" `Quick test_reallocation ]
     ; "errors", [ test_case "error cases" `Quick test_error_cases ]
