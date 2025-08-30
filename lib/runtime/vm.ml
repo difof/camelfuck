@@ -1,9 +1,12 @@
+open Core
 open Stdlib
 open Stdio
+open Encoder.Instruction
 
 type t =
-  { code : bytes
-  ; code_length : int
+  { instrs : Encoder.Instruction.t array
+  ; instr_count : int
+  ; jump_targets : int array
   ; memory : Tape.t
   ; input : In_channel.t
   ; output : Out_channel.t
@@ -28,13 +31,120 @@ let pp_error fmt = function
 
 exception VMExn of error
 
+let[@inline] ensure_bounds code code_length pos needed =
+  let last = pos + needed in
+  if last >= code_length then raise (VMExn (BytecodeOutOfBounds last))
+;;
+
+let decode_program program =
+  let code = program in
+  let code_length = Bytes.length code in
+  let[@inline] i8_to_int v = if v >= 128 then v - 256 else v in
+  let[@inline] read_i8 off = Bytes.unsafe_get code off |> Char.code |> i8_to_int in
+  let[@inline] read_i32 off = Bytes.get_int32_le code off |> Int32.to_int in
+  let[@inline] rec read_pairs acc idx remaining =
+    if remaining = 0
+    then List.rev acc
+    else (
+      let d = Bytes.unsafe_get code idx |> Char.code |> i8_to_int in
+      let c = Bytes.unsafe_get code (idx + 1) |> Char.code |> i8_to_int in
+      read_pairs ((d, c) :: acc) (idx + 2) (remaining - 1))
+  in
+  let rec loop pc instrs_rev starts_rev =
+    if pc >= code_length
+    then (
+      let instrs = Array.of_list (List.rev instrs_rev) in
+      let starts = Array.of_list (List.rev starts_rev) in
+      let byte_to_index = Array.make (code_length + 1) (-1) in
+      Array.iteri
+        (fun i start ->
+           if start >= 0 && start <= code_length then byte_to_index.(start) <- i)
+        starts;
+      let jump_targets = Array.make (Array.length instrs) (-1) in
+      Array.iteri
+        (fun i instr ->
+           match instr with
+           | Jz rel | Jnz rel ->
+             let start_pc = starts.(i) in
+             let target_pc = start_pc + rel in
+             let target_idx =
+               if target_pc >= 0 && target_pc <= code_length
+               then byte_to_index.(target_pc)
+               else -1
+             in
+             jump_targets.(i) <- target_idx
+           | _ -> ())
+        instrs;
+      instrs, jump_targets)
+    else (
+      let op = Bytes.unsafe_get code pc in
+      match op with
+      | '\x00' -> loop (pc + 1) (Hang :: instrs_rev) (pc :: starts_rev)
+      | '\x01' ->
+        ensure_bounds code code_length pc 1;
+        let n = read_i8 (pc + 1) in
+        loop (pc + 2) (AddN n :: instrs_rev) (pc :: starts_rev)
+      | '\x02' ->
+        ensure_bounds code code_length pc 1;
+        let n = read_i8 (pc + 1) in
+        loop (pc + 2) (MoveN n :: instrs_rev) (pc :: starts_rev)
+      | '\x03' ->
+        ensure_bounds code code_length pc 4;
+        let rel = read_i32 (pc + 1) in
+        loop (pc + 5) (Jz rel :: instrs_rev) (pc :: starts_rev)
+      | '\x04' ->
+        ensure_bounds code code_length pc 4;
+        let rel = read_i32 (pc + 1) in
+        loop (pc + 5) (Jnz rel :: instrs_rev) (pc :: starts_rev)
+      | '\x05' -> loop (pc + 1) (In :: instrs_rev) (pc :: starts_rev)
+      | '\x06' -> loop (pc + 1) (Out :: instrs_rev) (pc :: starts_rev)
+      | '\x07' -> loop (pc + 1) (Call :: instrs_rev) (pc :: starts_rev)
+      | '\x08' -> loop (pc + 1) (SetZero :: instrs_rev) (pc :: starts_rev)
+      | '\x09' -> loop (pc + 1) (Transfer1R :: instrs_rev) (pc :: starts_rev)
+      | '\x0A' -> loop (pc + 1) (Add1 :: instrs_rev) (pc :: starts_rev)
+      | '\x0B' -> loop (pc + 1) (Sub1 :: instrs_rev) (pc :: starts_rev)
+      | '\x0C' -> loop (pc + 1) (Move1R :: instrs_rev) (pc :: starts_rev)
+      | '\x0D' -> loop (pc + 1) (Move1L :: instrs_rev) (pc :: starts_rev)
+      | '\x0E' -> loop (pc + 1) (Transfer1L :: instrs_rev) (pc :: starts_rev)
+      | '\x0F' ->
+        ensure_bounds code code_length pc 1;
+        let n = read_i8 (pc + 1) in
+        loop (pc + 2) (TransferN n :: instrs_rev) (pc :: starts_rev)
+      | '\x10' -> loop (pc + 1) (Scan1R :: instrs_rev) (pc :: starts_rev)
+      | '\x11' -> loop (pc + 1) (Scan1L :: instrs_rev) (pc :: starts_rev)
+      | '\x12' ->
+        ensure_bounds code code_length pc 1;
+        let n = read_i8 (pc + 1) in
+        loop (pc + 2) (ScanN n :: instrs_rev) (pc :: starts_rev)
+      | '\x13' ->
+        ensure_bounds code code_length pc 2;
+        let d = read_i8 (pc + 1) in
+        let n = read_i8 (pc + 2) in
+        loop (pc + 3) (AddAt (d, n) :: instrs_rev) (pc :: starts_rev)
+      | '\x14' ->
+        ensure_bounds code code_length pc 1;
+        let count = Bytes.unsafe_get code (pc + 1) |> Char.code in
+        let total_pairs_bytes = count * 2 in
+        ensure_bounds code code_length pc (1 + total_pairs_bytes);
+        let pairs = read_pairs [] (pc + 2) count in
+        loop
+          (pc + 2 + total_pairs_bytes)
+          (MulTransfer pairs :: instrs_rev)
+          (pc :: starts_rev)
+      | op -> raise (VMExn (InvalidInstruction op)))
+  in
+  loop 0 [] []
+;;
+
 let create
       ?(io = In_channel.stdin, Out_channel.stdout)
       ?(memory = Tape.create 256)
       program
   =
-  { code = program
-  ; code_length = Bytes.length program
+  let instrs, jump_targets = decode_program program in
+  { instrs
+  ; instr_count = Array.length instrs
+  ; jump_targets
   ; memory
   ; input = fst io
   ; output = snd io
@@ -70,149 +180,79 @@ let[@inline] advance ?(replace = -1) ?(n = 1) t =
   t
 ;;
 
-let[@inline] ensure_can_read t bytes =
-  let last = t.pc + bytes in
-  if last >= t.code_length then raise (VMExn (BytecodeOutOfBounds last))
-;;
-
-let[@inline] ensure_pc_bounds t pos =
-  if pos < 0 || pos > t.code_length then raise (VMExn (JumpOutOfBounds pos)) else t
-;;
-
-let[@inline] ensure_i8_sign v = if v >= 128 then v - 256 else v
-
-let[@inline] read_imm_i8 t =
-  ensure_can_read t 1;
-  ensure_i8_sign (Bytes.unsafe_get t.code (t.pc + 1) |> Char.code)
-;;
-
-let[@inline] read_imm_i8_2 t =
-  ensure_can_read t 2;
-  let b1 = Bytes.unsafe_get t.code (t.pc + 1) |> Char.code in
-  let b2 = Bytes.unsafe_get t.code (t.pc + 2) |> Char.code in
-  ensure_i8_sign b1, ensure_i8_sign b2
-;;
-
-let[@inline] read_imm_i32 t =
-  ensure_can_read t 4;
-  Bytes.get_int32_le t.code (t.pc + 1) |> Int32.to_int
-;;
-
 let exec_instr t = function
-  | '\x00' ->
-    (* Hang *)
-    hang t
-  | '\x01' ->
-    (* AddN imm8 *)
-    Tape.add t.memory (read_imm_i8 t);
-    advance t ~n:2
-  | '\x02' ->
-    (* MoveN imm8 *)
-    Tape.move_exn t.memory (read_imm_i8 t);
-    advance t ~n:2
-  | '\x03' ->
-    (* Jz imm32 *)
+  | Hang -> hang t
+  | AddN n ->
+    Tape.add t.memory n;
+    advance t
+  | MoveN n ->
+    Tape.move_exn t.memory n;
+    advance t
+  | Jz _ ->
     if Tape.get t.memory = 0
     then (
-      let rel = read_imm_i32 t in
-      let new_pc = t.pc + rel in
-      ensure_pc_bounds t new_pc |> advance ~replace:new_pc)
-    else advance t ~n:5
-  | '\x04' ->
-    (* Jnz imm32 *)
+      let target = t.jump_targets.(t.pc) in
+      (* if target < 0 || target >= t.instr_count *)
+      (* then raise (VMExn (JumpOutOfBounds target)) *)
+      (*else*)
+      advance ~replace:target t)
+    else advance t
+  | Jnz _ ->
     if Tape.get t.memory <> 0
     then (
-      let rel = read_imm_i32 t in
-      let new_pc = t.pc + rel in
-      ensure_pc_bounds t new_pc |> advance ~replace:new_pc)
-    else advance t ~n:5
-  | '\x05' ->
-    (* In *)
+      let target = t.jump_targets.(t.pc) in
+      (* if target < 0 || target >= t.instr_count *)
+      (* then raise (VMExn (JumpOutOfBounds target)) *)
+      (*else*)
+      advance ~replace:target t)
+    else advance t
+  | In ->
     let v = In_channel.input_char t.input |> Option.value ~default:'\000' |> Char.code in
     Tape.set t.memory v;
     advance t
-  | '\x06' ->
-    (* Out *)
+  | Out ->
     Tape.get t.memory |> Char.chr |> Out_channel.output_char t.output;
     Out_channel.flush t.output;
     advance t
-  | '\x07' ->
-    (* Call: runtime extension placeholder - no-op for now *)
-    advance t
-  | '\x08' ->
-    (* SetZero *)
+  | Call -> advance t
+  | SetZero ->
     Tape.set t.memory 0;
     advance t
-  | '\x09' ->
-    (* Transfer1R *)
-    op_transfer t |> advance
-  | '\x0A' ->
-    (* Add1 *)
+  | Transfer1R -> op_transfer t |> advance
+  | Add1 ->
     Tape.add t.memory 1;
     advance t
-  | '\x0B' ->
-    (* Sub1 *)
+  | Sub1 ->
     Tape.add t.memory (-1);
     advance t
-  | '\x0C' ->
-    (* Move1R *)
+  | Move1R ->
     Tape.move_exn t.memory 1;
     advance t
-  | '\x0D' ->
-    (* Move1L *)
+  | Move1L ->
     Tape.move_exn t.memory (-1);
     advance t
-  | '\x0E' ->
-    (* Transfer1L *)
-    op_transfer ~delta:(-1) t |> advance
-  | '\x0F' ->
-    (* TransferN imm8 *)
-    let n = read_imm_i8 t in
-    op_transfer ~delta:n t |> advance ~n:2
-  | '\x10' ->
-    (* Scan1R *)
-    op_scan t |> advance
-  | '\x11' ->
-    (* Scan1L *)
-    op_scan ~stride:(-1) t |> advance
-  | '\x12' ->
-    (* ScanN imm8 *)
-    let n = read_imm_i8 t in
-    op_scan ~stride:n t |> advance ~n:2
-  | '\x13' ->
-    (* AddAt imm8 imm8 *)
-    let delta, n = read_imm_i8_2 t in
+  | Transfer1L -> op_transfer ~delta:(-1) t |> advance
+  | TransferN n -> op_transfer ~delta:n t |> advance
+  | Scan1R -> op_scan t |> advance
+  | Scan1L -> op_scan ~stride:(-1) t |> advance
+  | ScanN n -> op_scan ~stride:n t |> advance
+  | AddAt (delta, n) ->
     Tape.add_at_offset_exn t.memory delta n;
-    advance t ~n:3
-  | '\x14' ->
-    (* MulTransfer: count followed by (delta, coeff) pairs; zeroes source *)
-    ensure_can_read t 1;
-    let count = Bytes.unsafe_get t.code (t.pc + 1) |> Char.code in
-    let total_pairs_bytes = count * 2 in
-    ensure_can_read t (1 + total_pairs_bytes);
+    advance t
+  | MulTransfer pairs ->
     let source_value = Tape.get t.memory in
     if source_value <> 0
     then (
       Tape.set t.memory 0;
-      let rec apply idx remaining =
-        if remaining <> 0
-        then (
-          let d = Bytes.unsafe_get t.code (t.pc + idx) |> Char.code |> ensure_i8_sign in
-          let c =
-            Bytes.unsafe_get t.code (t.pc + idx + 1) |> Char.code |> ensure_i8_sign
-          in
-          Tape.add_at_offset_exn t.memory d (source_value * c);
-          apply (idx + 2) (remaining - 1))
-      in
-      apply 2 count);
-    advance t ~n:(2 + total_pairs_bytes)
-  | op -> raise (VMExn (InvalidInstruction op))
+      pairs
+      |> List.iter (fun (d, c) -> Tape.add_at_offset_exn t.memory d (source_value * c)));
+    let size = 1 + 1 + (2 * List.length pairs) in
+    ignore size;
+    advance t
 ;;
 
 let rec run_exn t =
-  if t.pc >= t.code_length
-  then t
-  else run_exn (Bytes.unsafe_get t.code t.pc |> exec_instr t)
+  if t.pc >= t.instr_count then t else run_exn (exec_instr t t.instrs.(t.pc))
 ;;
 
 let run t =

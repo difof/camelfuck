@@ -2,4 +2,4 @@
  (name runtime)
  (public_name runtime)
  (modules vm) ; handleman extcall)
- (libraries core tape))
+ (libraries core tape encoder))
