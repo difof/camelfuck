@@ -55,7 +55,7 @@ let[@inline] op_transfer ?(pos = 1) t =
   then (
     Tape.set t.memory 0;
     Tape.move_exn t.memory pos;
-    Tape.set t.memory (Tape.get t.memory + v);
+    Tape.add t.memory v;
     Tape.move_exn t.memory (-pos));
   t
 ;;
@@ -106,7 +106,7 @@ let exec_instr t = function
     hang t
   | '\x01' ->
     (* AddN imm8 *)
-    Tape.set t.memory (Tape.get t.memory + read_imm_i8 t);
+    Tape.add t.memory (read_imm_i8 t);
     advance t ~n:2
   | '\x02' ->
     (* MoveN imm8 *)
@@ -150,11 +150,11 @@ let exec_instr t = function
     op_transfer t |> advance
   | '\x0A' ->
     (* Add1 *)
-    Tape.set t.memory (Tape.get t.memory + 1);
+    Tape.add t.memory 1;
     advance t
   | '\x0B' ->
     (* Sub1 *)
-    Tape.set t.memory (Tape.get t.memory - 1);
+    Tape.add t.memory (-1);
     advance t
   | '\x0C' ->
     (* Move1R *)
@@ -185,7 +185,7 @@ let exec_instr t = function
     (* AddAt imm8 imm8 *)
     let delta, n = read_imm_i8_2 t in
     Tape.move_exn t.memory delta;
-    Tape.set t.memory (Tape.get t.memory + n);
+    Tape.add t.memory n;
     Tape.move_exn t.memory (-delta);
     advance t ~n:3
   | '\x14' ->
@@ -206,9 +206,7 @@ let exec_instr t = function
           let c =
             Bytes.unsafe_get t.code (t.pc + idx + 1) |> Char.code |> ensure_i8_sign
           in
-          Tape.move_exn t.memory d;
-          Tape.set t.memory (Tape.get t.memory + (source_value * c));
-          Tape.move_exn t.memory (-d);
+          Tape.add_at_offset_exn t.memory d (source_value * c);
           apply (idx + 2) (remaining - 1))
       in
       apply 2 count);
