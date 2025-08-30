@@ -128,15 +128,25 @@ let run_optimized program =
   let open Result in
   let open Encoder.Compiler in
   let open Runtime.Vm in
+  let start = Time_ns.now () in
   program
   |> compile
   |> map_error ~f:(fun err -> CompileError err)
   >>= fun bytecode ->
+  let vm = create bytecode in
+  let end_prep = Time_ns.diff (Time_ns.now ()) start in
+  let start = Time_ns.now () in
+  let result = vm |> run |> map_error ~f:(fun err -> VMError err) in
+  let end_run = Time_ns.diff (Time_ns.now ()) start in
   Out_channel.printf
     "Program size %d bytes -> compiled %d bytes\n"
     (String.length program)
     (Bytes.length bytecode);
-  create bytecode |> run |> map_error ~f:(fun err -> VMError err)
+  Out_channel.printf
+    "Took %s to preload and %s to run\n"
+    (Time_ns.Span.to_string end_prep)
+    (Time_ns.Span.to_string end_run);
+  result
 ;;
 
 let run_raw program =
