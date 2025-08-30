@@ -49,14 +49,12 @@ let hang t =
   t
 ;;
 
-let[@inline] op_transfer ?(pos = 1) t =
+let[@inline] op_transfer ?(delta = 1) t =
   let v = Tape.get t.memory in
   if v <> 0
   then (
     Tape.set t.memory 0;
-    Tape.move_exn t.memory pos;
-    Tape.add t.memory v;
-    Tape.move_exn t.memory (-pos));
+    Tape.add_at_offset_exn t.memory delta v);
   t
 ;;
 
@@ -166,11 +164,11 @@ let exec_instr t = function
     advance t
   | '\x0E' ->
     (* Transfer1L *)
-    op_transfer ~pos:(-1) t |> advance
+    op_transfer ~delta:(-1) t |> advance
   | '\x0F' ->
     (* TransferN imm8 *)
     let n = read_imm_i8 t in
-    op_transfer ~pos:n t |> advance ~n:2
+    op_transfer ~delta:n t |> advance ~n:2
   | '\x10' ->
     (* Scan1R *)
     op_scan t |> advance
@@ -184,9 +182,7 @@ let exec_instr t = function
   | '\x13' ->
     (* AddAt imm8 imm8 *)
     let delta, n = read_imm_i8_2 t in
-    Tape.move_exn t.memory delta;
-    Tape.add t.memory n;
-    Tape.move_exn t.memory (-delta);
+    Tape.add_at_offset_exn t.memory delta n;
     advance t ~n:3
   | '\x14' ->
     (* MulTransfer: count followed by (delta, coeff) pairs; zeroes source *)
