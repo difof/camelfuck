@@ -87,12 +87,22 @@ let[@inline] move_exn t n =
   if i >= 0 && i < t.len then () else realloc_exn t i
 ;;
 
-let[@inline] move t n =
-  try
-    move_exn t n;
-    Ok ()
-  with
-  | TapeExn err -> Error err
+let scan_to_zero_exn t delta =
+  let stride = abs delta in
+  let dir = if delta > 0 then 1 else -1 in
+  let rec scan i =
+    let next = i + (dir * stride) in
+    if next >= 0 && next < t.len
+    then if Array.unsafe_get t.buffer next = 0 then t.pos <- next - t.bias else scan next
+    else (
+      let old_bias = t.bias in
+      realloc_exn t next;
+      let bias_shift = t.bias - old_bias in
+      let next_idx = next + bias_shift in
+      t.pos <- next_idx - t.bias)
+  in
+  let i = physical_index t in
+  if Array.unsafe_get t.buffer i <> 0 then scan i
 ;;
 
 let[@inline] get t =
