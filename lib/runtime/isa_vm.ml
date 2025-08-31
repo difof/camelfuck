@@ -30,7 +30,7 @@ let pp_error fmt = function
 
 let create
       ?(io = In_channel.stdin, Out_channel.stdout)
-      ?(memory = Tape.create 256)
+      ?(memory = Tape.create ~max_size:(1 lsl 26) 256)
       program
   =
   { program = Array.of_list program
@@ -56,20 +56,8 @@ let[@inline] op_transfer t delta =
     Tape.add_at_offset_exn t.memory delta v)
 ;;
 
-let[@inline] op_scan t delta =
-  while Tape.get t.memory <> 0 do
-    Tape.move_exn t.memory delta
-  done
-;;
-
-let[@inline] op_multransfer t pairs =
-  let source_value = Tape.get t.memory in
-  if source_value <> 0
-  then (
-    Tape.set t.memory 0;
-    pairs
-    |> List.iter ~f:(fun (d, c) -> Tape.add_at_offset_exn t.memory d (source_value * c)))
-;;
+let[@inline] op_scan t delta = Tape.scan_to_zero_exn t.memory delta
+let[@inline] op_multransfer t pairs = Tape.multransfer_exn t.memory pairs
 
 let run_exn t =
   let len = t.program_length in
