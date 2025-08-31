@@ -34,11 +34,13 @@ let[@inline] blit_bounds_check_exn t len =
 
 let realloc_exn t new_index =
   let needed = max (abs new_index + 1) t.len in
-  (* grow in multples of 2 *)
-  let rec grow x = if x < needed then grow (x lsl 1) else x in
-  let new_len = grow (max 32 (t.len + (t.len lsr 1))) in
-  if new_len > t.max_size
-  then raise (TapeExn (MaxAllocationReached (new_index, t.max_size)));
+  let new_len =
+    (* grow in multples of 2, starting from ~1.5x current length *)
+    let rec grow x = if x < needed then grow (x lsl 1) else x in
+    let base = max 32 (t.len + (t.len lsr 1)) in
+    Int.min t.max_size (grow base)
+  in
+  if new_len < needed then raise (TapeExn (MaxAllocationReached (new_index, t.max_size)));
   let new_buf = alloc new_len in
   let new_bias, dst =
     if new_index < 0
