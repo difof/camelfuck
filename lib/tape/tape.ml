@@ -134,12 +134,12 @@ let[@inline] add_at_offset_exn t delta v =
   Array.unsafe_set t.buffer i (mask (cur + v))
 ;;
 
-let[@inline] add_at_offset t delta v =
-  try
-    add_at_offset_exn t delta v;
-    Ok ()
-  with
-  | TapeExn err -> Error err
+let[@inline] multransfer_exn t pairs =
+  let source_value = get t in
+  if source_value <> 0
+  then (
+    set t 0;
+    List.iter pairs ~f:(fun (d, c) -> add_at_offset_exn t d (source_value * c)))
 ;;
 
 let[@inline] len t = t.len
