@@ -3,7 +3,7 @@ open Core
 type t =
   { mutable pos : int
   ; mutable bias : int
-  ; mutable buffer : bytes
+  ; mutable buffer : int array
   ; mutable len : int
   ; max_size : int
   }
@@ -20,7 +20,7 @@ type error =
 exception TapeExn of error
 
 let[@inline] physical_index t = t.bias + t.pos
-let[@inline] alloc n = Bytes.make n '\000'
+let[@inline] alloc n = Array.create ~len:n 0
 let[@inline] mask v = v land 0xFF
 
 let[@inline] blit_bounds_check_exn t len =
@@ -54,7 +54,7 @@ let realloc_exn t new_index =
       (* within bounds but reallocating *)
       new_len / 2, (new_len / 2) - t.bias
   in
-  Bytes.blit ~src:t.buffer ~src_pos:0 ~dst:new_buf ~dst_pos:dst ~len:t.len;
+  Array.blit ~src:t.buffer ~src_pos:0 ~dst:new_buf ~dst_pos:dst ~len:t.len;
   t.buffer <- new_buf;
   t.bias <- new_bias;
   t.len <- new_len
@@ -95,39 +95,31 @@ let[@inline] move t n =
 
 let[@inline] get t =
   let i = physical_index t in
-  Stdlib.Char.code @@ Bytes.unsafe_get t.buffer i
+  Array.unsafe_get t.buffer i
 ;;
 
 let[@inline] set t v =
   let i = physical_index t in
-  Bytes.unsafe_set t.buffer i @@ Stdlib.Char.unsafe_chr @@ mask v
+  Array.unsafe_set t.buffer i (mask v)
 ;;
 
 let[@inline] add t v =
   let i = physical_index t in
-  let cur = Stdlib.Char.code @@ Bytes.unsafe_get t.buffer i in
-  Bytes.unsafe_set t.buffer i @@ Stdlib.Char.unsafe_chr @@ mask (cur + v)
+  let cur = Array.unsafe_get t.buffer i in
+  Array.unsafe_set t.buffer i (mask (cur + v))
 ;;
 
 let[@inline] set_at_offset_exn t delta v =
-  let idx = t.bias + t.pos + delta in
-  if idx < 0 || idx >= t.len then realloc_exn t idx;
-  Bytes.unsafe_set t.buffer idx @@ Stdlib.Char.unsafe_chr @@ mask v
-;;
-
-let[@inline] set_at_offset t delta v =
-  try
-    set_at_offset_exn t delta v;
-    Ok ()
-  with
-  | TapeExn err -> Error err
+  let i = physical_index t + delta in
+  if i < 0 || i >= t.len then realloc_exn t i;
+  Array.unsafe_set t.buffer i (mask v)
 ;;
 
 let[@inline] add_at_offset_exn t delta v =
-  let idx = t.bias + t.pos + delta in
-  if idx < 0 || idx >= t.len then realloc_exn t idx;
-  let cur = Stdlib.Char.code @@ Bytes.unsafe_get t.buffer idx in
-  Bytes.unsafe_set t.buffer idx @@ Stdlib.Char.unsafe_chr @@ mask (cur + v)
+  let i = physical_index t + delta in
+  if i < 0 || i >= t.len then realloc_exn t i;
+  let cur = Array.unsafe_get t.buffer i in
+  Array.unsafe_set t.buffer i (mask (cur + v))
 ;;
 
 let[@inline] add_at_offset t delta v =
@@ -146,41 +138,17 @@ let[@inline] max_size t = t.max_size
 
 let[@inline] blit_out_exn t dst len =
   let src_pos = blit_bounds_check_exn t len in
-  Bytes.blit ~src:t.buffer ~src_pos ~dst ~dst_pos:0 ~len
-;;
-
-let[@inline] blit_out t dst len =
-  try
-    blit_out_exn t dst len;
-    Ok ()
-  with
-  | TapeExn err -> Error err
+  Array.blit ~src:t.buffer ~src_pos ~dst ~dst_pos:0 ~len
 ;;
 
 let[@inline] blit_in_exn t src len =
   let dst_pos = blit_bounds_check_exn t len in
-  Bytes.blit ~src ~src_pos:0 ~dst:t.buffer ~dst_pos ~len
-;;
-
-let[@inline] blit_in t src len =
-  try
-    blit_in_exn t src len;
-    Ok ()
-  with
-  | TapeExn err -> Error err
+  Array.blit ~src ~src_pos:0 ~dst:t.buffer ~dst_pos ~len
 ;;
 
 let[@inline] blit_in_ensure_exn t src len =
   let dst_pos = physical_index t in
   let last_pos = dst_pos + len - 1 in
   if last_pos < 0 || last_pos >= t.len then realloc_exn t last_pos;
-  Bytes.blit ~src ~src_pos:0 ~dst:t.buffer ~dst_pos ~len
-;;
-
-let[@inline] blit_in_ensure t src len =
-  try
-    blit_in_ensure_exn t src len;
-    Ok ()
-  with
-  | TapeExn err -> Error err
+  Array.blit ~src ~src_pos:0 ~dst:t.buffer ~dst_pos ~len
 ;;
