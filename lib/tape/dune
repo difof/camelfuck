@@ -1,4 +1,9 @@
 (library
  (name tape)
  (public_name tape)
- (libraries core))
+ (libraries core)
+ ; (instrumentation
+ ;  (backend landmarks))
+ ; (preprocess
+ ;  (pps landmarks-ppx --auto))
+ )
