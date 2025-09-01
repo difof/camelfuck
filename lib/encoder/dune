@@ -1,5 +1,0 @@
-(library
- (name encoder)
- (public_name encoder)
- (modules compiler instruction)
- (libraries core))
