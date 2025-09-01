@@ -1,4 +1,4 @@
 (test
  (name test_vm)
- (libraries runtime encoder tape alcotest)
+ (libraries runtime tape alcotest)
  (modules test_vm))

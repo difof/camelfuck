@@ -1,8 +1,7 @@
-open Encoder.Compiler
 open Runtime.Vm
 
 let compile_exn s =
-  match compile s with
+  match Compiler.full_pass s with
   | Ok b -> b
   | Error _ -> failwith "compile error"
 ;;
@@ -67,15 +66,13 @@ let test_hello_progression () =
   (* read first 7 bytes from index 0 using blit *)
   let original_pos = Tape.logical_pos mem in
   Tape.move_exn mem (-original_pos);
-  let buf = Bytes.make 7 '\000' in
+  let buf = Array.make 7 0 in
   Tape.blit_out_exn mem buf 7;
   (* restore pointer position *)
   Tape.move_exn mem original_pos;
   let to_list b =
     let rec loop acc i =
-      if i = Bytes.length b
-      then List.rev acc
-      else loop (Bytes.get_uint8 b i :: acc) (i + 1)
+      if i = Array.length b then List.rev acc else loop (b.(i) :: acc) (i + 1)
     in
     loop [] 0
   in
