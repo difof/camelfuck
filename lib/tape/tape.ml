@@ -70,7 +70,7 @@ let pp_error fmt = function
   | BlitNegativeLength len -> Format.fprintf fmt "Blit was given negative length %d" len
 ;;
 
-let create ?(bias_offset = Middle) ?(max_size = 16384) initial_size =
+let create ?(bias_offset = Middle) ?(max_size = 32768) initial_size =
   let len = max 256 initial_size in
   let max_size = max len max_size in
   let bias =
