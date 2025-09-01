@@ -19,9 +19,6 @@
  (name tape))
 
 (package
- (name encoder))
-
-(package
  (name runtime))
 
 (package

@@ -116,17 +116,17 @@ end
 
 type optimized_error =
   | CompileError of Compiler.error
-  | VMError of Runtime.Isa_vm.error
+  | VMError of Runtime.Vm.error
 
 let pp_optimized_error fmt = function
   | CompileError err -> Format.fprintf fmt "compile error: %a" Compiler.pp_error err
-  | VMError err -> Format.fprintf fmt "VM error: %a" Runtime.Isa_vm.pp_error err
+  | VMError err -> Format.fprintf fmt "VM error: %a" Runtime.Vm.pp_error err
 ;;
 
 let run_optimized source =
   let open Result in
   let open Compiler in
-  let open Runtime.Isa_vm in
+  let open Runtime.Vm in
   let start = Time_ns.now () in
   source
   |> full_pass

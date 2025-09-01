@@ -2,7 +2,7 @@
  (package camelfuck)
  (public_name camelfuck)
  (name main)
- (libraries core stdio tape runtime encoder isa compiler)
+ (libraries core stdio tape runtime isa compiler)
  ; (instrumentation
  ;  (backend landmarks))
  ; (preprocess
