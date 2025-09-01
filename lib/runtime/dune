@@ -1,8 +1,8 @@
 (library
  (name runtime)
  (public_name runtime)
- (modules vm isa_vm) ; handleman extcall)
- (libraries core tape encoder isa compiler)
+ (modules vm) ; handleman extcall)
+ (libraries core tape isa compiler)
  ; (instrumentation
  ;  (backend landmarks))
  ; (preprocess
