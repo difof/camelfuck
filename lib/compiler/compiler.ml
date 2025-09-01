@@ -38,7 +38,7 @@ let parse_sequence source =
       | '-' | '<' -> 128
       | _ -> 127
     in
-    let chunks = chunkify cap count [] |> List.map ~f:(fun n -> Instr (instr n)) in
+    let chunks = chunkify cap count [] |> List.map ~f:(fun n -> instr n) in
     List.fold chunks ~init:acc ~f:(fun acc i -> i :: acc), next_pos
   in
   let rec parse acc pos =
@@ -47,16 +47,16 @@ let parse_sequence source =
     else (
       match source.[pos] with
       | '+' ->
-        let acc, next_pos = accumulate_chunks acc pos '+' (fun n -> AddN n) in
+        let acc, next_pos = accumulate_chunks acc pos '+' (fun n -> Instr (AddN n)) in
         parse acc next_pos
       | '-' ->
-        let acc, next_pos = accumulate_chunks acc pos '-' (fun n -> AddN (-n)) in
+        let acc, next_pos = accumulate_chunks acc pos '-' (fun n -> Instr (AddN (-n))) in
         parse acc next_pos
       | '>' ->
-        let acc, next_pos = accumulate_chunks acc pos '>' (fun n -> MoveN n) in
+        let acc, next_pos = accumulate_chunks acc pos '>' (fun n -> Instr (MoveN n)) in
         parse acc next_pos
       | '<' ->
-        let acc, next_pos = accumulate_chunks acc pos '<' (fun n -> MoveN (-n)) in
+        let acc, next_pos = accumulate_chunks acc pos '<' (fun n -> Instr (MoveN (-n))) in
         parse acc next_pos
       | '.' -> parse (Instr Out :: acc) (pos + 1)
       | ',' -> parse (Instr In :: acc) (pos + 1)
