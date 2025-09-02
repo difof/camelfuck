@@ -12,8 +12,7 @@ type t =
   | Out
   | Call
   | Clear
-  | ClearMoveN of int
-  | ClearN of int
+  | ClearN of int * bool
 
 type intr =
   | Instr of t
