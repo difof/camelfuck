@@ -93,47 +93,48 @@ let fuse_std_ops instructions =
   fixed_point (fun instrs -> optimize [] instrs) instructions
 ;;
 
-let optimize_patterns instructions =
-  (* Try matching a multiplication transfer loop: zero source, distribute to offsets, return to origin *)
-  let try_multransfer =
-    let add_or_update pairs delta coeff =
-      let rec loop acc = function
-        | [] -> List.rev ((delta, coeff) :: acc)
-        | (d, c) :: tl when d = delta -> List.rev_append acc ((d, c + coeff) :: tl)
-        | hd :: tl -> loop (hd :: acc) tl
-      in
-      loop [] pairs
+(* Try matching a multiplication transfer loop: zero source, distribute to offsets, return to origin *)
+let try_multransfer =
+  let add_or_update pairs delta coeff =
+    let rec loop acc = function
+      | [] -> List.rev ((delta, coeff) :: acc)
+      | (d, c) :: tl when d = delta -> List.rev_append acc ((d, c + coeff) :: tl)
+      | hd :: tl -> loop (hd :: acc) tl
     in
-    let rec collect pairs seen_dec cur_off = function
-      | [] -> None
-      | OpenLoop :: _ -> None
-      | CloseLoop :: rest ->
-        if Int.( = ) cur_off 0 && seen_dec
-        then (
-          let nz = List.filter pairs ~f:(fun (_, c) -> c <> 0) in
-          match nz with
-          | [] -> None
-          | [ (_, 1) ] -> None
-          | _ ->
-            let merged =
-              nz |> List.sort ~compare:(fun (d1, _) (d2, _) -> Int.compare d1 d2)
-              (* already merged by add_or_update; sort is enough *)
-            in
-            Some (merged, rest))
-        else None
-      | Instr (MoveN d) :: tl -> collect pairs seen_dec (cur_off + d) tl
-      | Instr (AddN k) :: tl ->
-        if Int.( = ) cur_off 0
-        then if k = -1 && not seen_dec then collect pairs true cur_off tl else None
-        else collect (add_or_update pairs cur_off k) seen_dec cur_off tl
-      | _ :: _ -> None
-    in
-    function
-    | Instr (AddN _) :: _ as tl -> collect [] false 0 tl
-    | Instr (MoveN _) :: _ as tl -> collect [] false 0 tl
-    | CloseLoop :: _ -> None
-    | _ -> None
+    loop [] pairs
   in
+  let rec collect pairs seen_dec cur_off = function
+    | [] -> None
+    | OpenLoop :: _ -> None
+    | CloseLoop :: rest ->
+      if cur_off = 0 && seen_dec
+      then (
+        let nz = List.filter pairs ~f:(fun (_, c) -> c <> 0) in
+        match nz with
+        | [] -> None
+        | [ (_, 1) ] -> None
+        | _ ->
+          let merged =
+            (* already merged by add_or_update; sort is enough *)
+            nz |> List.sort ~compare:(fun (d1, _) (d2, _) -> compare d1 d2)
+          in
+          Some (merged, rest))
+      else None
+    | Instr (MoveN d) :: tl -> collect pairs seen_dec (cur_off + d) tl
+    | Instr (AddN k) :: tl ->
+      if cur_off = 0
+      then if k = -1 && not seen_dec then collect pairs true cur_off tl else None
+      else collect (add_or_update pairs cur_off k) seen_dec cur_off tl
+    | _ :: _ -> None
+  in
+  function
+  | Instr (AddN _) :: _ as tl -> collect [] false 0 tl
+  | Instr (MoveN _) :: _ as tl -> collect [] false 0 tl
+  | CloseLoop :: _ -> None
+  | _ -> None
+;;
+
+let optimize_patterns instructions =
   let rec optimize acc = function
     | [] -> List.rev acc
     | OpenLoop :: tl ->
@@ -173,8 +174,21 @@ let optimize_patterns instructions =
             optimize (Instr (TransferN n) :: acc) rest
           | _ -> optimize (OpenLoop :: acc) tl))
     | Instr (MoveN d1) :: Instr (AddN n) :: Instr (MoveN d2) :: rest when d1 = -d2 ->
-      (* k>k+k< *)
+      (* k>/<; k+/-; k</>; *)
       optimize (Instr (AddAt (d1, n)) :: acc) rest
+    | Instr Clear :: Instr (MoveN d) :: Instr Clear :: rest when abs d = 1 ->
+      (* [-]>[-](repeat >[-])(w/o < or <<) *)
+      let rec collect k = function
+        | Instr (MoveN d2) :: Instr Clear :: rest' when d2 = d -> collect (k + 1) rest'
+        | rest' -> k, rest'
+      in
+      let count, rest' = collect 2 rest in
+      (match rest' with
+       | Instr (MoveN back) :: tl ->
+         let adj = back + (d * (count - 1)) in
+         let new_tail = if adj = 0 then tl else Instr (MoveN adj) :: tl in
+         optimize (Instr (ClearN (d * count, false)) :: acc) new_tail
+       | _ -> optimize (Instr (ClearN (d * count, true)) :: acc) rest')
     | instr :: rest -> optimize (instr :: acc) rest
   in
   fixed_point (fun instrs -> optimize [] instrs) instructions
@@ -217,6 +231,8 @@ let resolve_jumps intermediates =
   in
   create (module Int) |> build_jump_table >>| map_intermediate_to_instr
 ;;
+
+(* another step in the pipeline to validate instruction immediates such as ClearN withing -128...127 *)
 
 let full_pass source =
   source |> parse_sequence |> fuse_std_ops |> optimize_patterns |> resolve_jumps
