@@ -19,9 +19,9 @@ type error =
 
 exception TapeExn of error
 
-let[@inline] physical_index t = t.bias + t.pos
-let[@inline] alloc n = Array.create ~len:n 0
-let[@inline] mask v = v land 0xFF
+let[@inline always] physical_index t = t.bias + t.pos
+let[@inline always] alloc n = Array.create ~len:n 0
+let[@inline always] mask v = v land 0xFF
 
 let[@inline] blit_bounds_check_exn t len =
   let offset = physical_index t in
@@ -71,7 +71,7 @@ let pp_error fmt = function
 ;;
 
 let create ?(bias_offset = Middle) ?(max_size = 32768) initial_size =
-  let len = max 256 initial_size in
+  let len = max 8 initial_size in
   let max_size = max len max_size in
   let bias =
     match bias_offset with
@@ -123,15 +123,45 @@ let[@inline] add t v =
 
 let[@inline] set_at_offset_exn t delta v =
   let i = physical_index t + delta in
-  if i < 0 || i >= t.len then realloc_exn t i;
+  if i < 0 || i >= t.len
+  then (
+    realloc_exn t i;
+    Array.unsafe_set t.buffer (physical_index t + delta) (mask v));
   Array.unsafe_set t.buffer i (mask v)
 ;;
 
 let[@inline] add_at_offset_exn t delta v =
   let i = physical_index t + delta in
-  if i < 0 || i >= t.len then realloc_exn t i;
+  let i =
+    if i < 0 || i >= t.len
+    then (
+      realloc_exn t i;
+      physical_index t + delta)
+    else i
+  in
   let cur = Array.unsafe_get t.buffer i in
   Array.unsafe_set t.buffer i (mask (cur + v))
+;;
+
+let[@inline] mulclear_exn t delta =
+  let count = abs delta in
+  if count <> 0
+  then (
+    let base = physical_index t in
+    let dir = if delta > 0 then 1 else -1 in
+    let rec loop step =
+      if step < count
+      then (
+        let idx = base + (dir * step) in
+        if idx >= 0 && idx < t.len
+        then (
+          Array.unsafe_set t.buffer idx 0;
+          loop (step + 1))
+        else
+          (* the newly created region is empty so we break early *)
+          realloc_exn t idx)
+    in
+    loop 0)
 ;;
 
 let[@inline] multransfer_exn t pairs =

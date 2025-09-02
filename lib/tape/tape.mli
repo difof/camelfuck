@@ -40,6 +40,9 @@ val set_at_offset_exn : t -> int -> int -> unit
 (* Add a value at logical offset from current pointer without moving it (masked) *)
 val add_at_offset_exn : t -> int -> int -> unit
 
+(* Clear N amount of cells from current pointer *)
+val mulclear_exn : t -> int -> unit
+
 (* Multiply-add transfer from current cell to offsets; zeroes source if non-zero *)
 val multransfer_exn : t -> (int * int) list -> unit
 
