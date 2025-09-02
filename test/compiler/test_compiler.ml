@@ -145,7 +145,7 @@ let test_resolve_errors () =
 let test_fuse_std_ops () =
   let instrs = parse_sequence "+++-->>><<<" |> fuse_std_ops in
   let s = List.map ~f:show_intermediate instrs in
-  Alcotest.(check (list string)) "fused" [ "Instr(addn(1))" ] s
+  Alcotest.(check (list string)) "fused" [ "Instr(AddN(1))" ] s
 ;;
 
 let test_optimize_patterns () =
@@ -162,7 +162,18 @@ let test_optimize_patterns () =
   expect "transfer left" "[<+>-]" [ Instr (TransferN (-1)) ];
   expect "addat" ">>+<<" [ Instr (AddAt (2, 1)) ];
   expect "multransfer r" "[->+>>+>++<<<<]" [ Instr (MulTransfer [ 1, 1; 3, 1; 4, 2 ]) ];
-  expect "multransfer l" "[<+<<+<++>>>>-]" [ Instr (MulTransfer [ -4, 2; -3, 1; -1, 1 ]) ]
+  expect "multransfer l" "[<+<<+<++>>>>-]" [ Instr (MulTransfer [ -4, 2; -3, 1; -1, 1 ]) ];
+  (* ClearN detection with move flag and tail move folding *)
+  expect "clearn fwd move true" "[-]>[-]" [ Instr (ClearN (2, true)) ];
+  expect "clearn fwd move true plus" "[+]>[+]" [ Instr (ClearN (2, true)) ];
+  expect "clearn bwd move true" "[-]<[-]" [ Instr (ClearN (-2, true)) ];
+  expect "clearn bwd move true plus" "[+]<[+]" [ Instr (ClearN (-2, true)) ];
+  expect "clearn fwd move false" "[-]>[-]>[-]<<" [ Instr (ClearN (3, false)) ];
+  expect "clearn bwd move false" "[-]<[-]<[-]>>" [ Instr (ClearN (-3, false)) ];
+  expect
+    "clearn fwd move false with extra"
+    "+>[-]>[-]>[-]<<<<"
+    [ Instr (AddN 1); Instr (MoveN 1); Instr (ClearN (3, false)); Instr (MoveN (-2)) ]
 ;;
 
 let () =

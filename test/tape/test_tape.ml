@@ -166,6 +166,78 @@ let test_multransfer () =
   Alcotest.(check int) "no-op when source is zero" 0 (get tape)
 ;;
 
+let test_mulclear_forward () =
+  let tape = create ~max_size:4096 256 in
+  (* seed values at +1..+4 *)
+  set_at_offset_exn tape 1 10;
+  set_at_offset_exn tape 2 11;
+  set_at_offset_exn tape 3 12;
+  set_at_offset_exn tape 4 13;
+  move_exn tape 1;
+  Tape.mulclear_exn tape 3;
+  (* +1..+3 should be zero; +4 unaffected *)
+  Alcotest.(check int) "+1 cleared" 0 (get tape);
+  move_exn tape 1;
+  Alcotest.(check int) "+2 cleared" 0 (get tape);
+  move_exn tape 1;
+  Alcotest.(check int) "+3 cleared" 0 (get tape);
+  move_exn tape 1;
+  Alcotest.(check int) "+4 intact" 13 (get tape);
+  (* pointer should remain at +4 due to moves in assertions; reset to origin for cleanliness *)
+  move_exn tape (-4)
+;;
+
+let test_mulclear_backward () =
+  let tape = create ~max_size:4096 256 in
+  (* seed values at -1..-3 *)
+  set_at_offset_exn tape (-1) 21;
+  set_at_offset_exn tape (-2) 22;
+  set_at_offset_exn tape (-3) 23;
+  move_exn tape (-1);
+  Tape.mulclear_exn tape (-2);
+  Alcotest.(check int) "-1 cleared" 0 (get tape);
+  move_exn tape (-1);
+  Alcotest.(check int) "-2 cleared" 0 (get tape);
+  move_exn tape (-1);
+  Alcotest.(check int) "-3 intact" 23 (get tape);
+  move_exn tape 3
+;;
+
+let test_mulclear_zero_delta () =
+  let tape = create ~max_size:4096 256 in
+  set_at_offset_exn tape 1 7;
+  Tape.mulclear_exn tape 0;
+  move_exn tape 1;
+  Alcotest.(check int) "zero delta is no-op" 7 (get tape);
+  move_exn tape (-1)
+;;
+
+let test_mulclear_realloc_early_return_right () =
+  (* small max_size to force realloc on clearing beyond current len edge *)
+  let tape = create ~max_size:4096 32 in
+  (* place value near right edge of current buffer to trigger realloc when clearing to +N *)
+  move_exn tape ((len tape / 2) - 2);
+  set tape 99;
+  move_exn tape (-logical_pos tape);
+  Tape.mulclear_exn tape (logical_pos tape + 10);
+  (* After realloc, we should return early; verify that the far cell is zero (it is newly allocated) *)
+  move_exn tape (logical_pos tape + 10);
+  Alcotest.(check int) "far cell zero after realloc" 0 (get tape);
+  move_exn tape (-logical_pos tape)
+;;
+
+let test_mulclear_realloc_early_return_left () =
+  let tape = create ~max_size:4096 32 in
+  (* move near left, then attempt large negative clear to force realloc *)
+  move_exn tape (-((len tape / 2) - 2));
+  set tape 55;
+  move_exn tape (-logical_pos tape);
+  Tape.mulclear_exn tape (-(abs (logical_pos tape) + 10));
+  move_exn tape (-(abs (logical_pos tape) + 10));
+  Alcotest.(check int) "far left cell zero after realloc" 0 (get tape);
+  move_exn tape (-logical_pos tape)
+;;
+
 let () =
   let open Alcotest in
   run
@@ -187,6 +259,16 @@ let () =
         ; test_case "add_at_offset" `Quick test_offset_add_at_offset
         ] )
     ; "memory", [ test_case "reallocation" `Quick test_reallocation ]
-    ; "specialized", [ test_case "multransfer" `Quick test_multransfer ]
+    ; ( "specialized"
+      , [ test_case "multransfer" `Quick test_multransfer
+        ; test_case "mulclear forward" `Quick test_mulclear_forward
+        ; test_case "mulclear backward" `Quick test_mulclear_backward
+        ; test_case "mulclear zero delta" `Quick test_mulclear_zero_delta
+        ; test_case
+            "mulclear realloc right"
+            `Quick
+            test_mulclear_realloc_early_return_right
+        ; test_case "mulclear realloc left" `Quick test_mulclear_realloc_early_return_left
+        ] )
     ]
 ;;
