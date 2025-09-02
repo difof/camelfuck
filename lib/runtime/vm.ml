@@ -59,6 +59,14 @@ let[@inline] op_transfer t delta =
 let[@inline] op_scan t delta = Tape.scan_to_zero_exn t.memory delta
 let[@inline] op_multransfer t pairs = Tape.multransfer_exn t.memory pairs
 
+let[@inline] op_clearn t move n =
+  Tape.mulclear_exn t.memory n;
+  if move
+  then (
+    let disp = if n > 0 then n - 1 else if n < 0 then n + 1 else 0 in
+    Tape.move_exn t.memory disp)
+;;
+
 let run_exn t =
   let len = t.program_length in
   while t.pc < len do
@@ -102,12 +110,11 @@ let run_exn t =
     | MulTransfer pairs ->
       op_multransfer t pairs;
       t.pc <- t.pc + 1
-    (* exec_instr t t.program.(t.pc) *)
-    (* if t.pc % 10 = 0 then Out_channel.flush t.output *)
+    | ClearN (n, move) ->
+      op_clearn t move n;
+      t.pc <- t.pc + 1
   done
 ;;
-
-(* Out_channel.flush t.output *)
 
 let run t =
   try Ok (run_exn t) with
