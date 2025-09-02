@@ -12,6 +12,8 @@ type t =
   | Out
   | Call
   | Clear
+  | ClearMoveN of int
+  | ClearN of int
 
 type intr =
   | Instr of t

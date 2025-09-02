@@ -14,6 +14,8 @@ type t =
   | Out
   | Call
   | Clear
+  | ClearMoveN of int
+  | ClearN of int
 (* TODO: SetConst: Clear -> AddN *)
 
 type intr =
@@ -43,6 +45,8 @@ let pp_t fmt = function
       | (d, c) :: tl -> Format.fprintf fmt "(%d,%d);%a" d c pp_pairs tl
     in
     Format.fprintf fmt "multransfer[%a]" pp_pairs pairs
+  | ClearMoveN n -> Format.fprintf fmt "clearmoven(%d)" n
+  | ClearN n -> Format.fprintf fmt "clearn(%d)" n
 ;;
 
 let pp_intr fmt = function
@@ -61,6 +65,7 @@ let byte_size = function
   | AddAt _ -> 3
   | Jz _ | Jnz _ -> 5
   | MulTransfer pairs -> 2 + (2 * List.length pairs)
+  | ClearMoveN _ | ClearN _ -> 2
   | _ -> 1
 ;;
 
@@ -80,6 +85,8 @@ let to_char t =
   | ScanN _ -> chr 0x0A
   | AddAt (_, _) -> chr 0x0B
   | MulTransfer _ -> chr 0x0C
+  | ClearMoveN _ -> chr 0x0D
+  | ClearN _ -> chr 0x0E
 ;;
 
 let encode t =
@@ -125,7 +132,8 @@ let encode t =
     else Ok (op_with_arg t (byte_size t) Bytes.set_int32_le @@ Int32.of_int v)
   in
   match t with
-  | AddN n | MoveN n | TransferN n | ScanN n -> op_with_i8_arg t n
+  | AddN n | MoveN n | TransferN n | ScanN n | ClearMoveN n | ClearN n ->
+    op_with_i8_arg t n
   | AddAt (d, n) -> op_with_i8_2_arg t (d, n)
   | Jz rel_pos | Jnz rel_pos -> op_with_int32_arg t rel_pos
   | MulTransfer pairs ->
