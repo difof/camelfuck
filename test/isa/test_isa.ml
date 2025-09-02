@@ -54,7 +54,11 @@ let test_to_char_and_size () =
   Alcotest.(check int) "AddAt size" 3 (byte_size (AddAt (0, 0)));
   Alcotest.(check char) "MulTransfer opcode" (Char.chr 0x0C) (to_char (MulTransfer []));
   Alcotest.(check int) "MulTransfer size empty" 2 (byte_size (MulTransfer []));
-  Alcotest.(check int) "MulTransfer size 2" 6 (byte_size (MulTransfer [ 1, 2; 3, 4 ]))
+  Alcotest.(check int) "MulTransfer size 2" 6 (byte_size (MulTransfer [ 1, 2; 3, 4 ]));
+  Alcotest.(check char) "ClearMoveN opcode" (Char.chr 0x0D) (to_char (ClearMoveN 0));
+  Alcotest.(check int) "ClearMoveN size" 2 (byte_size (ClearMoveN 0));
+  Alcotest.(check char) "ClearN opcode" (Char.chr 0x0E) (to_char (ClearN 0));
+  Alcotest.(check int) "ClearN size" 2 (byte_size (ClearN 0))
 ;;
 
 let test_encode_i8_ranges () =
@@ -69,7 +73,9 @@ let test_encode_i8_ranges () =
   expect_error "MoveN -129" (MoveN (-129));
   expect_ok_bytes "TransferN 5" (TransferN 5) [ 0x09; 0x05 ];
   expect_error "TransferN 128" (TransferN 128);
-  expect_ok_bytes "ScanN -1" (ScanN (-1)) [ 0x0A; 0xFF ]
+  expect_ok_bytes "ScanN -1" (ScanN (-1)) [ 0x0A; 0xFF ];
+  expect_ok_bytes "ClearMoveN -3" (ClearMoveN (-3)) [ 0x0D; 0xFD ];
+  expect_ok_bytes "ClearN 2" (ClearN 2) [ 0x0E; 0x02 ]
 ;;
 
 let test_encode_addat_ranges () =
