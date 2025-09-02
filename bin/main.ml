@@ -132,6 +132,7 @@ let run_optimized source =
   |> full_pass
   |> map_error ~f:(fun err -> CompileError err)
   >>= fun program ->
+  (* let vm = create ~memory:(Tape.create 0) program in *)
   let vm = create ~memory:(Tape.create ~max_size:(1 lsl 26) 16000) program in
   let end_prep = Time_ns.diff (Time_ns.now ()) start in
   let start = Time_ns.now () in
