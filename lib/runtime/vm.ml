@@ -68,14 +68,7 @@ let hang () =
   done
 ;;
 
-let[@inline] op_transfer t delta =
-  let v = Tape.get t.memory in
-  if v <> 0
-  then (
-    Tape.set t.memory 0;
-    Tape.add_at_offset_exn t.memory delta v)
-;;
-
+let[@inline] op_transfer t delta = Tape.transfer_exn t.memory delta
 let[@inline] op_scan t delta = Tape.scan_to_zero_exn t.memory delta
 let[@inline] op_multransfer t pairs = Tape.multransfer_exn t.memory pairs
 
