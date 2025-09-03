@@ -204,7 +204,7 @@ let combine_encoded_list instr_bytes_list =
   code
 ;;
 
-let pp_intr_indent ?(spacing = 2) fmt intr_ls =
+let pp_intr_indent ?(spacing = 1) fmt intr_ls =
   let unit =
     let sp = Int.max 0 spacing in
     "|" ^ String.make sp ' '
@@ -215,17 +215,17 @@ let pp_intr_indent ?(spacing = 2) fmt intr_ls =
     else String.concat ~sep:"" (List.init indent ~f:(fun _ -> unit))
   in
   intr_ls
-  |> List.foldi ~init:0 ~f:(fun i indent intr ->
+  |> List.fold ~init:0 ~f:(fun indent intr ->
     match intr with
     | Instr t ->
-      Format.fprintf fmt "[%06d] %s%a\n" i (bar_prefix indent) pp_t t;
+      Format.fprintf fmt "%s%a\n" (bar_prefix indent) pp_t t;
       indent
     | OpenLoop ->
-      Format.fprintf fmt "[%06d] %sOpenLoop\n" i (bar_prefix indent);
+      Format.fprintf fmt "%sOpenLoop\n" (bar_prefix indent);
       indent + 1
     | CloseLoop ->
       let new_indent = Int.max 0 (indent - 1) in
-      Format.fprintf fmt "[%06d] %sCloseLoop\n" i (bar_prefix new_indent);
+      Format.fprintf fmt "%sCloseLoop\n" (bar_prefix new_indent);
       new_indent)
   |> ignore
 ;;
