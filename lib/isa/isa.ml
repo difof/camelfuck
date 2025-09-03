@@ -50,8 +50,8 @@ let pp_t fmt = function
 
 let pp_intr fmt = function
   | Instr t -> pp_t fmt t
-  | OpenLoop -> Format.fprintf fmt "openloop"
-  | CloseLoop -> Format.fprintf fmt "closeloop"
+  | OpenLoop -> Format.fprintf fmt "OpenLoop"
+  | CloseLoop -> Format.fprintf fmt "CloseLoop"
 ;;
 
 let pp_error fmt = function
@@ -202,4 +202,30 @@ let combine_encoded_list instr_bytes_list =
     pos + len)
   |> ignore;
   code
+;;
+
+let pp_intr_indent ?(spacing = 2) fmt intr_ls =
+  let unit =
+    let sp = Int.max 0 spacing in
+    "|" ^ String.make sp ' '
+  in
+  let bar_prefix indent =
+    if indent <= 0
+    then ""
+    else String.concat ~sep:"" (List.init indent ~f:(fun _ -> unit))
+  in
+  intr_ls
+  |> List.foldi ~init:0 ~f:(fun i indent intr ->
+    match intr with
+    | Instr t ->
+      Format.fprintf fmt "[%06d] %s%a\n" i (bar_prefix indent) pp_t t;
+      indent
+    | OpenLoop ->
+      Format.fprintf fmt "[%06d] %sOpenLoop\n" i (bar_prefix indent);
+      indent + 1
+    | CloseLoop ->
+      let new_indent = Int.max 0 (indent - 1) in
+      Format.fprintf fmt "[%06d] %sCloseLoop\n" i (bar_prefix new_indent);
+      new_indent)
+  |> ignore
 ;;

@@ -123,16 +123,25 @@ let pp_optimized_error fmt = function
   | VMError err -> Format.fprintf fmt "VM error: %a" Runtime.Vm.pp_error err
 ;;
 
+let print_optimized source =
+  let open Compiler in
+  let open Isa in
+  let instructions = source |> parse_sequence |> fuse_std_ops |> optimize_patterns in
+  Format.printf "%a\n" (pp_intr_indent ~spacing:2) instructions
+;;
+
 let run_optimized source =
   let open Result in
   let open Compiler in
   let open Runtime.Vm in
+  Out_channel.print_endline "## IR:";
+  source |> print_optimized;
+  Out_channel.print_endline "## End";
   let start = Time_ns.now () in
   source
   |> full_pass
   |> map_error ~f:(fun err -> CompileError err)
   >>= fun program ->
-  (* let vm = create ~memory:(Tape.create 0) program in *)
   let vm = create ~memory:(Tape.create ~max_size:(1 lsl 26) 16000) program in
   let end_prep = Time_ns.diff (Time_ns.now ()) start in
   let start = Time_ns.now () in
