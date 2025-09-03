@@ -93,122 +93,6 @@ let fuse_std_ops instructions =
   fixed_point (fun instrs -> optimize [] instrs) instructions
 ;;
 
-(* Try matching a multiplication transfer loop: zero source, distribute to offsets, return to origin *)
-let try_multransfer =
-  let add_or_update pairs delta coeff =
-    let rec loop acc = function
-      | [] -> List.rev ((delta, coeff) :: acc)
-      | (d, c) :: tl when d = delta -> List.rev_append acc ((d, c + coeff) :: tl)
-      | hd :: tl -> loop (hd :: acc) tl
-    in
-    loop [] pairs
-  in
-  let rec collect pairs seen_dec cur_off = function
-    | [] -> None
-    | OpenLoop :: _ -> None
-    | CloseLoop :: rest ->
-      if cur_off = 0 && seen_dec
-      then (
-        let nz = List.filter pairs ~f:(fun (_, c) -> c <> 0) in
-        match nz with
-        | [] -> None
-        | [ (_, 1) ] -> None
-        | _ ->
-          let merged =
-            (* already merged by add_or_update; sort is enough *)
-            nz |> List.sort ~compare:(fun (d1, _) (d2, _) -> compare d1 d2)
-          in
-          Some (merged, rest))
-      else None
-    | Instr (MoveN d) :: tl -> collect pairs seen_dec (cur_off + d) tl
-    | Instr (AddN k) :: tl ->
-      if cur_off = 0
-      then if k = -1 && not seen_dec then collect pairs true cur_off tl else None
-      else collect (add_or_update pairs cur_off k) seen_dec cur_off tl
-    | _ :: _ -> None
-  in
-  function
-  | Instr (AddN _) :: _ as tl -> collect [] false 0 tl
-  | Instr (MoveN _) :: _ as tl -> collect [] false 0 tl
-  | CloseLoop :: _ -> None
-  | _ -> None
-;;
-
-let optimize_patterns instructions =
-  let rec optimize acc = function
-    | [] -> List.rev acc
-    | OpenLoop :: tl ->
-      (match try_multransfer tl with
-       | Some (pairs, rest) -> optimize (Instr (MulTransfer pairs) :: acc) rest
-       | None ->
-         (match tl with
-          | OpenLoop :: OpenLoop :: CloseLoop :: CloseLoop :: CloseLoop :: rest ->
-            (* [[[]]] runtime extension call *)
-            optimize (Instr Call :: acc) rest
-          | CloseLoop :: rest | OpenLoop :: CloseLoop :: CloseLoop :: rest ->
-            (* []/[[]] intentional halt *)
-            optimize (Instr Hang :: acc) rest
-          | Instr (AddN n) :: CloseLoop :: rest when n = -1 || n = 1 ->
-            (* [+/-] *)
-            optimize (Instr Clear :: acc) rest
-          | Instr (MoveN n) :: CloseLoop :: rest ->
-            (* [k</k>] *)
-            optimize (Instr (ScanN n) :: acc) rest
-          | Instr (AddN n1)
-            :: Instr (MoveN n)
-            :: Instr (AddN m1)
-            :: Instr (MoveN m)
-            :: CloseLoop
-            :: rest
-            when n1 = -1 && m1 = 1 && n <> 0 && m = -n ->
-            (* [ - k</> + k>/< ] TransferN to left/right *)
-            optimize (Instr (TransferN n) :: acc) rest
-          | Instr (MoveN n)
-            :: Instr (AddN m1)
-            :: Instr (MoveN m)
-            :: Instr (AddN n1)
-            :: CloseLoop
-            :: rest
-            when m1 = 1 && n1 = -1 && n <> 0 && m = -n ->
-            (* [ k</> + k>/< - ] TransferN to left/right *)
-            optimize (Instr (TransferN n) :: acc) rest
-          | _ -> optimize (OpenLoop :: acc) tl))
-    | Instr (MoveN d1) :: Instr (AddN n) :: Instr (MoveN d2) :: rest when d1 * d2 <= 0 ->
-      (* k>/<; k+/-; k</> *)
-      (* combine symmetric/partial cancellations around AddN into AddAt and a leftover MoveN if any. *)
-      if d1 = -d2
-      then
-        (* exact cancel *)
-        optimize (Instr (AddAt (d1, n)) :: acc) rest
-      else (
-        let leftover = d1 + d2 in
-        if abs d1 > abs d2
-        then (
-          (* first move overshoots: leftover before returning to origin of AddAt location *)
-          let addat_delta = -d2 in
-          optimize (Instr (AddAt (addat_delta, n)) :: Instr (MoveN leftover) :: acc) rest)
-        else
-          (* second move overshoots: leftover after AddAt from origin of first move *)
-          optimize (Instr (MoveN leftover) :: Instr (AddAt (d1, n)) :: acc) rest)
-    | Instr Clear :: Instr (MoveN d) :: Instr Clear :: rest when abs d = 1 ->
-      (* [-]>[-](repeat >[-])(w/o < or <<) *)
-      let rec collect k = function
-        | Instr (MoveN d2) :: Instr Clear :: rest' when d2 = d -> collect (k + 1) rest'
-        | rest' -> k, rest'
-      in
-      let count, rest' = collect 2 rest in
-      (match rest' with
-       | Instr (MoveN back) :: tl ->
-         let adj = back + (d * (count - 1)) in
-         let new_tail = if adj = 0 then tl else Instr (MoveN adj) :: tl in
-         optimize (Instr (ClearN (d * count, false)) :: acc) new_tail
-       | _ -> optimize (Instr (ClearN (d * count, true)) :: acc) rest')
-    | Instr Clear :: Instr (AddN n) :: rest -> optimize (Instr (SetConst n) :: acc) rest
-    | instr :: rest -> optimize (instr :: acc) rest
-  in
-  fixed_point (fun instrs -> optimize [] instrs) instructions
-;;
-
 let resolve_jumps intermediates =
   let open Result in
   let open Hashtbl in
@@ -250,5 +134,5 @@ let resolve_jumps intermediates =
 (* another step in the pipeline to validate instruction immediates such as ClearN withing -128...127 *)
 
 let full_pass source =
-  source |> parse_sequence |> fuse_std_ops |> optimize_patterns |> resolve_jumps
+  source |> parse_sequence |> fuse_std_ops |> Pattern_optimizer.run |> resolve_jumps
 ;;
