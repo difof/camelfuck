@@ -2,3 +2,8 @@
  (name test_compiler)
  (libraries compiler isa alcotest)
  (modules test_compiler))
+
+(test
+ (name test_pattern_optimizer)
+ (libraries compiler isa alcotest)
+ (modules test_pattern_optimizer))

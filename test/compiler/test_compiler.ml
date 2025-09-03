@@ -148,34 +148,6 @@ let test_fuse_std_ops () =
   Alcotest.(check (list string)) "fused" [ "Instr(AddN(1))" ] s
 ;;
 
-let test_optimize_patterns () =
-  let expect name source expected =
-    let actual = parse_sequence source |> fuse_std_ops |> optimize_patterns in
-    let s_expected = List.map ~f:show_intermediate expected in
-    let s_actual = List.map ~f:show_intermediate actual in
-    Alcotest.(check (list string)) name s_expected s_actual
-  in
-  expect "clear" "[-]" [ Instr Clear ];
-  expect "scan right" "[>]" [ Instr (ScanN 1) ];
-  expect "scan left" "[<]" [ Instr (ScanN (-1)) ];
-  expect "transfer right" "[>+<-]" [ Instr (TransferN 1) ];
-  expect "transfer left" "[<+>-]" [ Instr (TransferN (-1)) ];
-  expect "addat" ">>+<<" [ Instr (AddAt (2, 1)) ];
-  expect "multransfer r" "[->+>>+>++<<<<]" [ Instr (MulTransfer [ 1, 1; 3, 1; 4, 2 ]) ];
-  expect "multransfer l" "[<+<<+<++>>>>-]" [ Instr (MulTransfer [ -4, 2; -3, 1; -1, 1 ]) ];
-  (* ClearN detection with move flag and tail move folding *)
-  expect "clearn fwd move true" "[-]>[-]" [ Instr (ClearN (2, true)) ];
-  expect "clearn fwd move true plus" "[+]>[+]" [ Instr (ClearN (2, true)) ];
-  expect "clearn bwd move true" "[-]<[-]" [ Instr (ClearN (-2, true)) ];
-  expect "clearn bwd move true plus" "[+]<[+]" [ Instr (ClearN (-2, true)) ];
-  expect "clearn fwd move false" "[-]>[-]>[-]<<" [ Instr (ClearN (3, false)) ];
-  expect "clearn bwd move false" "[-]<[-]<[-]>>" [ Instr (ClearN (-3, false)) ];
-  expect
-    "clearn fwd move false with extra"
-    "+>[-]>[-]>[-]<<<<"
-    [ Instr (AddN 1); Instr (MoveN 1); Instr (ClearN (3, false)); Instr (MoveN (-2)) ]
-;;
-
 let () =
   let open Alcotest in
   run
@@ -195,9 +167,6 @@ let () =
         ; test_case "nested exact" `Quick test_resolve_nested_exact
         ; test_case "mixed exact" `Quick test_resolve_mixed_exact
         ] )
-    ; ( "optimize"
-      , [ test_case "fuse_std_ops" `Quick test_fuse_std_ops
-        ; test_case "patterns" `Quick test_optimize_patterns
-        ] )
+    ; "optimize", [ test_case "fuse_std_ops" `Quick test_fuse_std_ops ]
     ]
 ;;
