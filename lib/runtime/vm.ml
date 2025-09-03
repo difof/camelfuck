@@ -8,6 +8,9 @@ type t =
   ; input : In_channel.t
   ; output : Out_channel.t
   ; mutable pc : int
+  ; obuf : Bytes.t
+  ; obuf_len : int
+  ; mutable obuf_pos : int
   }
 
 type error =
@@ -33,13 +36,30 @@ let create
       ?(memory = Tape.create 32768)
       program
   =
+  let obuf_len = 16 in
   { program = Array.of_list program
   ; program_length = List.length program
   ; memory
   ; input = fst io
   ; output = snd io
   ; pc = 0
+  ; obuf = Bytes.make obuf_len '\000'
+  ; obuf_len
+  ; obuf_pos = 0
   }
+;;
+
+let[@inline always] flush_emit t =
+  Out_channel.output_bytes t.output t.obuf;
+  Out_channel.flush t.output;
+  Bytes.fill t.obuf ~pos:0 ~len:t.obuf_len '\000';
+  t.obuf_pos <- 0
+;;
+
+let[@inline always] emit_byte t (c : char) =
+  if t.obuf_pos >= t.obuf_len then flush_emit t;
+  Bytes.unsafe_set t.obuf t.obuf_pos c;
+  t.obuf_pos <- t.obuf_pos + 1
 ;;
 
 let hang () =
@@ -81,6 +101,7 @@ let run_exn t =
     | Jz rel -> if Tape.get t.memory = 0 then t.pc <- t.pc + rel else t.pc <- t.pc + 1
     | Jnz rel -> if Tape.get t.memory <> 0 then t.pc <- t.pc + rel else t.pc <- t.pc + 1
     | In ->
+      flush_emit t;
       let v =
         In_channel.input_char t.input
         |> Option.value ~default:'\000'
@@ -89,8 +110,7 @@ let run_exn t =
       Tape.set t.memory v;
       t.pc <- t.pc + 1
     | Out ->
-      Tape.get t.memory |> Stdlib.char_of_int |> Out_channel.output_char t.output;
-      Out_channel.flush t.output;
+      emit_byte t (Tape.get t.memory |> Stdlib.char_of_int);
       t.pc <- t.pc + 1
     | Call ->
       (* placeholder for runtime call *)
@@ -120,7 +140,12 @@ let run_exn t =
 ;;
 
 let run t =
-  try Ok (run_exn t) with
-  | VMExn err -> Error err
-  | Tape.TapeExn err -> Error (TapeError err)
+  let r =
+    try Ok (run_exn t) with
+    | VMExn err -> Error err
+    | Tape.TapeExn err -> Error (TapeError err)
+    | ex -> Error (Exception ex)
+  in
+  flush_emit t;
+  r
 ;;
