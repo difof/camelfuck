@@ -173,9 +173,23 @@ let optimize_patterns instructions =
             (* [ k</> + k>/< - ] TransferN to left/right *)
             optimize (Instr (TransferN n) :: acc) rest
           | _ -> optimize (OpenLoop :: acc) tl))
-    | Instr (MoveN d1) :: Instr (AddN n) :: Instr (MoveN d2) :: rest when d1 = -d2 ->
-      (* k>/<; k+/-; k</>; *)
-      optimize (Instr (AddAt (d1, n)) :: acc) rest
+    | Instr (MoveN d1) :: Instr (AddN n) :: Instr (MoveN d2) :: rest when d1 * d2 <= 0 ->
+      (* k>/<; k+/-; k</> *)
+      (* combine symmetric/partial cancellations around AddN into AddAt and a leftover MoveN if any. *)
+      if d1 = -d2
+      then
+        (* exact cancel *)
+        optimize (Instr (AddAt (d1, n)) :: acc) rest
+      else (
+        let leftover = d1 + d2 in
+        if abs d1 > abs d2
+        then (
+          (* first move overshoots: leftover before returning to origin of AddAt location *)
+          let addat_delta = -d2 in
+          optimize (Instr (AddAt (addat_delta, n)) :: Instr (MoveN leftover) :: acc) rest)
+        else
+          (* second move overshoots: leftover after AddAt from origin of first move *)
+          optimize (Instr (MoveN leftover) :: Instr (AddAt (d1, n)) :: acc) rest)
     | Instr Clear :: Instr (MoveN d) :: Instr Clear :: rest when abs d = 1 ->
       (* [-]>[-](repeat >[-])(w/o < or <<) *)
       let rec collect k = function
