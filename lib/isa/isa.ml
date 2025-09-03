@@ -15,7 +15,7 @@ type t =
   | Call
   | Clear
   | ClearN of int * bool
-(* TODO: SetConst: Clear -> AddN *)
+  | SetConst of int
 
 type intr =
   | Instr of t
@@ -45,6 +45,7 @@ let pp_t fmt = function
     in
     Format.fprintf fmt "MulTransfer[%a]" pp_pairs pairs
   | ClearN (n, move) -> Format.fprintf fmt "ClearN(%d,%b)" n move
+  | SetConst n -> Format.fprintf fmt "SetConst(%d)" n
 ;;
 
 let pp_intr fmt = function
@@ -59,11 +60,10 @@ let pp_error fmt = function
 ;;
 
 let byte_size = function
-  | AddN _ | MoveN _ | TransferN _ | ScanN _ -> 2
-  | AddAt _ -> 3
+  | AddN _ | MoveN _ | TransferN _ | ScanN _ | SetConst _ -> 2
+  | AddAt _ | ClearN _ -> 3
   | Jz _ | Jnz _ -> 5
   | MulTransfer pairs -> 2 + (2 * List.length pairs)
-  | ClearN _ -> 3
   | _ -> 1
 ;;
 
@@ -84,6 +84,7 @@ let to_char t =
   | AddAt (_, _) -> chr 0x0B
   | MulTransfer _ -> chr 0x0C
   | ClearN _ -> chr 0x0E
+  | SetConst _ -> chr 0x0F
 ;;
 
 let encode t =
@@ -129,7 +130,7 @@ let encode t =
     else Ok (op_with_arg t (byte_size t) Bytes.set_int32_le @@ Int32.of_int v)
   in
   match t with
-  | AddN n | MoveN n | TransferN n | ScanN n -> op_with_i8_arg t n
+  | AddN n | MoveN n | TransferN n | ScanN n | SetConst n -> op_with_i8_arg t n
   | ClearN (n, move) -> op_with_i8_2_arg t (n, if move then 1 else 0)
   | AddAt (d, n) -> op_with_i8_2_arg t (d, n)
   | Jz rel_pos | Jnz rel_pos -> op_with_int32_arg t rel_pos

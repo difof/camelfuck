@@ -13,6 +13,7 @@ type t =
   | Call
   | Clear
   | ClearN of int * bool
+  | SetConst of int
 
 type intr =
   | Instr of t

@@ -113,6 +113,9 @@ let run_exn t =
     | ClearN (n, move) ->
       op_clearn t move n;
       t.pc <- t.pc + 1
+    | SetConst n ->
+      Tape.set t.memory n;
+      t.pc <- t.pc + 1
   done
 ;;
 

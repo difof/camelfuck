@@ -189,6 +189,7 @@ let optimize_patterns instructions =
          let new_tail = if adj = 0 then tl else Instr (MoveN adj) :: tl in
          optimize (Instr (ClearN (d * count, false)) :: acc) new_tail
        | _ -> optimize (Instr (ClearN (d * count, true)) :: acc) rest')
+    | Instr Clear :: Instr (AddN n) :: rest -> optimize (Instr (SetConst n) :: acc) rest
     | instr :: rest -> optimize (instr :: acc) rest
   in
   fixed_point (fun instrs -> optimize [] instrs) instructions
