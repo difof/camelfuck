@@ -126,7 +126,7 @@ let pp_optimized_error fmt = function
 let print_optimized source =
   let open Compiler in
   let open Isa in
-  let instructions = source |> parse_sequence |> fuse_std_ops |> optimize_patterns in
+  let instructions = source |> parse_sequence |> fuse_std_ops |> Pattern_optimizer.run in
   Format.printf "%a\n" (pp_intr_indent ~spacing:2) instructions
 ;;
 
@@ -139,7 +139,10 @@ let run_optimized source =
   Out_channel.print_endline "## End";
   let start = Time_ns.now () in
   source
-  |> full_pass
+  |> parse_sequence
+  |> fuse_std_ops
+  |> Pattern_optimizer.run
+  |> resolve_jumps
   |> map_error ~f:(fun err -> CompileError err)
   >>= fun program ->
   let vm = create ~memory:(Tape.create ~max_size:(1 lsl 26) 16000) program in
