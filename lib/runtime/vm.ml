@@ -36,7 +36,7 @@ let create
       ?(memory = Tape.create 32768)
       program
   =
-  let obuf_len = 16 in
+  let obuf_len = 32 in
   { program = Array.of_list program
   ; program_length = List.length program
   ; memory
