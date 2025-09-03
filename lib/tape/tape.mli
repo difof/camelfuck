@@ -46,6 +46,9 @@ val mulclear_exn : t -> int -> unit
 (* Multiply-add transfer from current cell to offsets; zeroes source if non-zero *)
 val multransfer_exn : t -> (int * int) list -> unit
 
+(* Atomically move current cell's value to [delta] and zero the source if non-zero *)
+val transfer_exn : t -> int -> unit
+
 (* Get the total length of the Tape *)
 val len : t -> int
 

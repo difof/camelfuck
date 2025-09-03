@@ -172,6 +172,24 @@ let[@inline] multransfer_exn t pairs =
     List.iter pairs ~f:(fun (d, c) -> add_at_offset_exn t d (source_value * c)))
 ;;
 
+let[@inline] transfer_exn t delta =
+  let i = physical_index t in
+  let source_value = Array.unsafe_get t.buffer i in
+  if source_value <> 0
+  then (
+    Array.unsafe_set t.buffer i 0;
+    let j = i + delta in
+    let j =
+      if j < 0 || j >= t.len
+      then (
+        realloc_exn t j;
+        physical_index t + delta)
+      else j
+    in
+    let dest = Array.unsafe_get t.buffer j in
+    Array.unsafe_set t.buffer j (mask (dest + source_value)))
+;;
+
 let[@inline] len t = t.len
 let[@inline] bias t = t.bias
 let[@inline] logical_pos t = t.pos
