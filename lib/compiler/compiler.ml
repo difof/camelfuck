@@ -47,16 +47,16 @@ let parse_sequence source =
     else (
       match source.[pos] with
       | '+' ->
-        let acc, next_pos = accumulate_chunks acc pos '+' (fun n -> Instr (AddN n)) in
+        let acc, next_pos = accumulate_chunks acc pos '+' (fun n -> Instr (Add n)) in
         parse acc next_pos
       | '-' ->
-        let acc, next_pos = accumulate_chunks acc pos '-' (fun n -> Instr (AddN (-n))) in
+        let acc, next_pos = accumulate_chunks acc pos '-' (fun n -> Instr (Add (-n))) in
         parse acc next_pos
       | '>' ->
-        let acc, next_pos = accumulate_chunks acc pos '>' (fun n -> Instr (MoveN n)) in
+        let acc, next_pos = accumulate_chunks acc pos '>' (fun n -> Instr (Move n)) in
         parse acc next_pos
       | '<' ->
-        let acc, next_pos = accumulate_chunks acc pos '<' (fun n -> Instr (MoveN (-n))) in
+        let acc, next_pos = accumulate_chunks acc pos '<' (fun n -> Instr (Move (-n))) in
         parse acc next_pos
       | '.' -> parse (Instr Out :: acc) (pos + 1)
       | ',' -> parse (Instr In :: acc) (pos + 1)
@@ -79,14 +79,14 @@ let fuse_std_ops instructions =
   in
   let rec optimize acc = function
     | [] -> List.rev acc
-    | Instr (AddN 0) :: rest | Instr (MoveN 0) :: rest ->
+    | Instr (Add 0) :: rest | Instr (Move 0) :: rest ->
       (* this should never happen but we use it anyways *)
       optimize acc rest
-    | Instr (AddN n) :: Instr (AddN m) :: rest ->
-      let acc = chunkify acc (n + m) (fun v -> Instr (AddN v)) in
+    | Instr (Add n) :: Instr (Add m) :: rest ->
+      let acc = chunkify acc (n + m) (fun v -> Instr (Add v)) in
       optimize acc rest
-    | Instr (MoveN n) :: Instr (MoveN m) :: rest ->
-      let acc = chunkify acc (n + m) (fun v -> Instr (MoveN v)) in
+    | Instr (Move n) :: Instr (Move m) :: rest ->
+      let acc = chunkify acc (n + m) (fun v -> Instr (Move v)) in
       optimize acc rest
     | instr :: rest -> optimize (instr :: acc) rest
   in
@@ -131,8 +131,13 @@ let resolve_jumps intermediates =
   create (module Int) |> build_jump_table >>| map_intermediate_to_instr
 ;;
 
-(* another step in the pipeline to validate instruction immediates such as ClearN withing -128...127 *)
+(* another step in the pipeline to validate instruction immediates such as ClearCells withing -128...127 *)
 
 let full_pass source =
-  source |> parse_sequence |> fuse_std_ops |> Pattern_optimizer.run |> resolve_jumps
+  source
+  |> parse_sequence
+  |> fuse_std_ops
+  |> Pattern_optimizer.run
+  |> fuse_std_ops
+  |> resolve_jumps
 ;;
