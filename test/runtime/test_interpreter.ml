@@ -1,4 +1,4 @@
-open Runtime.Vm
+open Runtime.Interpreter
 
 let compile_exn s =
   match Compiler.full_pass s with

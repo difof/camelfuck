@@ -3,11 +3,11 @@ open Stdio
 
 type optimized_error =
   | CompileError of Compiler.error
-  | VMError of Runtime.Vm.error
+  | VMError of Runtime.Interpreter.error
 
 let pp_optimized_error fmt = function
   | CompileError err -> Format.fprintf fmt "compile error: %a" Compiler.pp_error err
-  | VMError err -> Format.fprintf fmt "VM error: %a" Runtime.Vm.pp_error err
+  | VMError err -> Format.fprintf fmt "VM error: %a" Runtime.Interpreter.pp_error err
 ;;
 
 let print_optimized source =
@@ -22,7 +22,7 @@ let print_optimized source =
 let run_optimized source =
   let open Result in
   let open Compiler in
-  let open Runtime.Vm in
+  let open Runtime.Interpreter in
   Out_channel.print_endline "## IR:";
   source |> print_optimized;
   Out_channel.print_endline "## End";
