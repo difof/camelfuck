@@ -68,10 +68,6 @@ let hang () =
   done
 ;;
 
-let[@inline] op_transfer t delta = Tape.transfer_exn t.memory delta
-let[@inline] op_scan t delta = Tape.scan_to_zero_exn t.memory delta
-let[@inline] op_multransfer t pairs = Tape.multransfer_exn t.memory pairs
-
 let[@inline] op_clearn t move n =
   Tape.mulclear_exn t.memory n;
   if move
@@ -85,10 +81,10 @@ let run_exn t =
   while t.pc < len do
     match t.program.(t.pc) with
     | Hang -> hang ()
-    | AddN n ->
+    | Add n ->
       Tape.add t.memory n;
       t.pc <- t.pc + 1
-    | MoveN n ->
+    | Move n ->
       Tape.move_exn t.memory n;
       t.pc <- t.pc + 1
     | Jz rel -> if Tape.get t.memory = 0 then t.pc <- t.pc + rel else t.pc <- t.pc + 1
@@ -111,23 +107,26 @@ let run_exn t =
     | Clear ->
       Tape.set t.memory 0;
       t.pc <- t.pc + 1
-    | TransferN n ->
-      op_transfer t n;
+    | TransferStride stride ->
+      Tape.transfer_exn t.memory stride;
       t.pc <- t.pc + 1
-    | ScanN n ->
-      op_scan t n;
+    | ScanStride stride ->
+      Tape.scan_to_zero_exn t.memory stride;
       t.pc <- t.pc + 1
     | AddAt (delta, n) ->
       Tape.add_at_offset_exn t.memory delta n;
       t.pc <- t.pc + 1
-    | MulTransfer pairs ->
-      op_multransfer t pairs;
+    | MultiTransfer pairs ->
+      Tape.multransfer_exn t.memory pairs;
       t.pc <- t.pc + 1
-    | ClearN (n, move) ->
+    | ClearCells (n, move) ->
       op_clearn t move n;
       t.pc <- t.pc + 1
     | SetConst n ->
       Tape.set t.memory n;
+      t.pc <- t.pc + 1
+    | TrailAdd pairs ->
+      Tape.trailadd_exn t.memory pairs;
       t.pc <- t.pc + 1
   done
 ;;
