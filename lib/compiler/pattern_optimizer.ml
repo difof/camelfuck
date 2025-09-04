@@ -165,8 +165,10 @@ let match_clearcells acc = function
        let adj = back + (d * (count - 1)) in
        (* leftover move checks *)
        let new_tail = if adj = 0 then tl else Instr (Move adj) :: tl in
-       Some (Instr (ClearCells (d * count, false)) :: acc, new_tail)
-     | _ -> Some (Instr (ClearCells (d * count, true)) :: acc, rest'))
+       Some (Instr (ClearCells (d * count)) :: acc, new_tail)
+     | _ ->
+       Some
+         (Instr (Move (d * (count - 1))) :: Instr (ClearCells (d * count)) :: acc, rest'))
   | _ -> None
 ;;
 
