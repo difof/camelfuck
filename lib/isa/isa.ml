@@ -16,7 +16,7 @@ type t =
   | Out
   | Call
   | Clear
-  | ClearCells of int * bool
+  | ClearCells of int
   | SetConst of int
   | TrailAdd of multi_op
 
@@ -47,7 +47,7 @@ let pp_t fmt = function
   | ScanStride n -> Format.fprintf fmt "ScanStride(%d)" n
   | AddAt (n, m) -> Format.fprintf fmt "AddAt(%d,%d)" n m
   | MultiTransfer pairs -> Format.fprintf fmt "MultiTransfer[%a]" pp_pairs pairs
-  | ClearCells (n, move) -> Format.fprintf fmt "ClearCells(%d,%b)" n move
+  | ClearCells n -> Format.fprintf fmt "ClearCells(%d)" n
   | SetConst n -> Format.fprintf fmt "SetConst(%d)" n
   | TrailAdd pairs -> Format.fprintf fmt "TrailAdd[%a]" pp_pairs pairs
 ;;
@@ -64,8 +64,8 @@ let pp_error fmt = function
 ;;
 
 let byte_size = function
-  | Add _ | Move _ | TransferStride _ | ScanStride _ | SetConst _ -> 2
-  | AddAt _ | ClearCells _ -> 3
+  | Add _ | Move _ | TransferStride _ | ScanStride _ | ClearCells _ | SetConst _ -> 2
+  | AddAt _ -> 3
   | Jz _ | Jnz _ -> 5
   | MultiTransfer pairs | TrailAdd pairs -> 2 + (2 * List.length pairs)
   | _ -> 1
@@ -136,7 +136,7 @@ let encode t =
   in
   match t with
   | Add n | Move n | TransferStride n | ScanStride n | SetConst n -> op_with_i8_arg t n
-  | ClearCells (n, move) -> op_with_i8_2_arg t (n, if move then 1 else 0)
+  | ClearCells n -> op_with_i8_arg t n
   | AddAt (d, n) -> op_with_i8_2_arg t (d, n)
   | Jz rel_pos | Jnz rel_pos -> op_with_int32_arg t rel_pos
   | MultiTransfer pairs | TrailAdd pairs ->

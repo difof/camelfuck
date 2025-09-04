@@ -14,7 +14,7 @@ type t =
   | Out
   | Call
   | Clear
-  | ClearCells of int * bool
+  | ClearCells of int
   | SetConst of int
   | TrailAdd of multi_op
 
