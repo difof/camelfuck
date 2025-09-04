@@ -126,7 +126,9 @@ let pp_optimized_error fmt = function
 let print_optimized source =
   let open Compiler in
   let open Isa in
-  let instructions = source |> parse_sequence |> fuse_std_ops |> Pattern_optimizer.run in
+  let instructions =
+    source |> parse_sequence |> fuse_std_ops |> Pattern_optimizer.run |> fuse_std_ops
+  in
   Format.printf "%a\n" (pp_intr_indent ~spacing:2) instructions
 ;;
 
