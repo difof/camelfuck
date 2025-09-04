@@ -30,10 +30,10 @@ let test_to_char_and_size () =
   (* opcode mapping and byte_size checks *)
   Alcotest.(check char) "Hang opcode" (Char.chr 0x00) (to_char Hang);
   Alcotest.(check int) "Hang size" 1 (byte_size Hang);
-  Alcotest.(check char) "AddN opcode" (Char.chr 0x01) (to_char (AddN 0));
-  Alcotest.(check int) "AddN size" 2 (byte_size (AddN 0));
-  Alcotest.(check char) "MoveN opcode" (Char.chr 0x02) (to_char (MoveN 0));
-  Alcotest.(check int) "MoveN size" 2 (byte_size (MoveN 0));
+  Alcotest.(check char) "Add opcode" (Char.chr 0x01) (to_char (Add 0));
+  Alcotest.(check int) "Add size" 2 (byte_size (Add 0));
+  Alcotest.(check char) "Move opcode" (Char.chr 0x02) (to_char (Move 0));
+  Alcotest.(check int) "Move size" 2 (byte_size (Move 0));
   Alcotest.(check char) "Jz opcode" (Char.chr 0x03) (to_char (Jz 0));
   Alcotest.(check int) "Jz size" 5 (byte_size (Jz 0));
   Alcotest.(check char) "Jnz opcode" (Char.chr 0x04) (to_char (Jnz 0));
@@ -46,34 +46,43 @@ let test_to_char_and_size () =
   Alcotest.(check int) "Call size" 1 (byte_size Call);
   Alcotest.(check char) "Clear opcode" (Char.chr 0x08) (to_char Clear);
   Alcotest.(check int) "Clear size" 1 (byte_size Clear);
-  Alcotest.(check char) "TransferN opcode" (Char.chr 0x09) (to_char (TransferN 0));
-  Alcotest.(check int) "TransferN size" 2 (byte_size (TransferN 0));
-  Alcotest.(check char) "ScanN opcode" (Char.chr 0x0A) (to_char (ScanN 0));
-  Alcotest.(check int) "ScanN size" 2 (byte_size (ScanN 0));
+  Alcotest.(check char)
+    "TransferStride opcode"
+    (Char.chr 0x09)
+    (to_char (TransferStride 0));
+  Alcotest.(check int) "TransferStride size" 2 (byte_size (TransferStride 0));
+  Alcotest.(check char) "ScanStride opcode" (Char.chr 0x0A) (to_char (ScanStride 0));
+  Alcotest.(check int) "ScanStride size" 2 (byte_size (ScanStride 0));
   Alcotest.(check char) "AddAt opcode" (Char.chr 0x0B) (to_char (AddAt (0, 0)));
   Alcotest.(check int) "AddAt size" 3 (byte_size (AddAt (0, 0)));
-  Alcotest.(check char) "MulTransfer opcode" (Char.chr 0x0C) (to_char (MulTransfer []));
-  Alcotest.(check int) "MulTransfer size empty" 2 (byte_size (MulTransfer []));
-  Alcotest.(check int) "MulTransfer size 2" 6 (byte_size (MulTransfer [ 1, 2; 3, 4 ]));
-  Alcotest.(check char) "ClearN opcode" (Char.chr 0x0E) (to_char (ClearN (0, false)));
-  Alcotest.(check int) "ClearN size" 3 (byte_size (ClearN (0, false)))
+  Alcotest.(check char)
+    "MultiTransfer opcode"
+    (Char.chr 0x0C)
+    (to_char (MultiTransfer []));
+  Alcotest.(check int) "MultiTransfer size empty" 2 (byte_size (MultiTransfer []));
+  Alcotest.(check int) "MultiTransfer size 2" 6 (byte_size (MultiTransfer [ 1, 2; 3, 4 ]));
+  Alcotest.(check char)
+    "ClearCells opcode"
+    (Char.chr 0x0E)
+    (to_char (ClearCells (0, false)));
+  Alcotest.(check int) "ClearCells size" 3 (byte_size (ClearCells (0, false)))
 ;;
 
 let test_encode_i8_ranges () =
-  (* AddN/MoveN/TransferN/ScanN i8 boundary checks *)
-  expect_ok_bytes "AddN 127" (AddN 127) [ 0x01; 0x7F ];
-  expect_ok_bytes "AddN -128" (AddN (-128)) [ 0x01; 0x80 ];
-  expect_error "AddN 128" (AddN 128);
-  expect_error "AddN -129" (AddN (-129));
-  expect_ok_bytes "MoveN 127" (MoveN 127) [ 0x02; 0x7F ];
-  expect_ok_bytes "MoveN -128" (MoveN (-128)) [ 0x02; 0x80 ];
-  expect_error "MoveN 128" (MoveN 128);
-  expect_error "MoveN -129" (MoveN (-129));
-  expect_ok_bytes "TransferN 5" (TransferN 5) [ 0x09; 0x05 ];
-  expect_error "TransferN 128" (TransferN 128);
-  expect_ok_bytes "ScanN -1" (ScanN (-1)) [ 0x0A; 0xFF ];
-  expect_ok_bytes "ClearN 2, false" (ClearN (2, false)) [ 0x0E; 0x02; 0x00 ];
-  expect_ok_bytes "ClearN -3, true" (ClearN (-3, true)) [ 0x0E; 0xFD; 0x01 ]
+  (* Add/Move/TransferStride/ScanStride i8 boundary checks *)
+  expect_ok_bytes "Add 127" (Add 127) [ 0x01; 0x7F ];
+  expect_ok_bytes "Add -128" (Add (-128)) [ 0x01; 0x80 ];
+  expect_error "Add 128" (Add 128);
+  expect_error "Add -129" (Add (-129));
+  expect_ok_bytes "Move 127" (Move 127) [ 0x02; 0x7F ];
+  expect_ok_bytes "Move -128" (Move (-128)) [ 0x02; 0x80 ];
+  expect_error "Move 128" (Move 128);
+  expect_error "Move -129" (Move (-129));
+  expect_ok_bytes "TransferStride 5" (TransferStride 5) [ 0x09; 0x05 ];
+  expect_error "TransferStride 128" (TransferStride 128);
+  expect_ok_bytes "ScanStride -1" (ScanStride (-1)) [ 0x0A; 0xFF ];
+  expect_ok_bytes "ClearCells 2, false" (ClearCells (2, false)) [ 0x0E; 0x02; 0x00 ];
+  expect_ok_bytes "ClearCells -3, true" (ClearCells (-3, true)) [ 0x0E; 0xFD; 0x01 ]
 ;;
 
 let test_encode_addat_ranges () =
@@ -91,25 +100,25 @@ let test_encode_jumps_32bit () =
 
 let test_encode_multransfer () =
   (* empty pairs *)
-  expect_ok_bytes "MulTransfer []" (MulTransfer []) [ 0x0C; 0x00 ];
+  expect_ok_bytes "MultiTransfer []" (MultiTransfer []) [ 0x0C; 0x00 ];
   (* two pairs *)
   expect_ok_bytes
-    "MulTransfer 2"
-    (MulTransfer [ 1, 2; -3, -4 ])
+    "MultiTransfer 2"
+    (MultiTransfer [ 1, 2; -3, -4 ])
     [ 0x0C; 0x02; 0x01; 0x02; 0xFD; 0xFC ];
   (* count bounds *)
   let pairs_128 = List.init 128 (fun _ -> 0, 0) in
-  (match encode (MulTransfer pairs_128) with
-   | Ok _ -> Alcotest.fail "MulTransfer with 128 pairs should error"
+  (match encode (MultiTransfer pairs_128) with
+   | Ok _ -> Alcotest.fail "MultiTransfer with 128 pairs should error"
    | Error _ -> ());
   (* operand bounds error mapping *)
-  match encode (MulTransfer [ 200, 0 ]) with
-  | Ok _ -> Alcotest.fail "MulTransfer bad delta should error"
+  match encode (MultiTransfer [ 200, 0 ]) with
+  | Ok _ -> Alcotest.fail "MultiTransfer bad delta should error"
   | Error _ -> ()
 ;;
 
 let test_encode_list_and_combine () =
-  match encode_list [ AddN 1; MoveN (-2); In; Jz 5 ] with
+  match encode_list [ Add 1; Move (-2); In; Jz 5 ] with
   | Error _ -> Alcotest.fail "encode_list should succeed"
   | Ok list_bytes ->
     let code = combine_encoded_list list_bytes in

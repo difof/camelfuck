@@ -19,10 +19,10 @@ let test_basic () =
   expect_parse
     "basic tokens"
     "+-<>.,[]"
-    [ Instr (AddN 1)
-    ; Instr (AddN (-1))
-    ; Instr (MoveN (-1))
-    ; Instr (MoveN 1)
+    [ Instr (Add 1)
+    ; Instr (Add (-1))
+    ; Instr (Move (-1))
+    ; Instr (Move 1)
     ; Instr Out
     ; Instr In
     ; OpenLoop
@@ -32,25 +32,25 @@ let test_basic () =
 
 let test_counts_and_caps () =
   let make c n = String.make n c in
-  expect_parse "plus fused" "++++" [ Instr (AddN 4) ];
-  expect_parse "minus fused" "----" [ Instr (AddN (-4)) ];
-  expect_parse "right fused" ">>>>" [ Instr (MoveN 4) ];
-  expect_parse "left fused" "<<<<" [ Instr (MoveN (-4)) ];
+  expect_parse "plus fused" "++++" [ Instr (Add 4) ];
+  expect_parse "minus fused" "----" [ Instr (Add (-4)) ];
+  expect_parse "right fused" ">>>>" [ Instr (Move 4) ];
+  expect_parse "left fused" "<<<<" [ Instr (Move (-4)) ];
   (* capping *)
   let s = make '+' 300 in
-  expect_parse "plus capped" s [ Instr (AddN 127); Instr (AddN 127); Instr (AddN 46) ];
+  expect_parse "plus capped" s [ Instr (Add 127); Instr (Add 127); Instr (Add 46) ];
   let s = make '-' 300 in
   expect_parse
     "minus capped"
     s
-    [ Instr (AddN (-128)); Instr (AddN (-128)); Instr (AddN (-44)) ];
+    [ Instr (Add (-128)); Instr (Add (-128)); Instr (Add (-44)) ];
   let s = make '>' 300 in
-  expect_parse "right capped" s [ Instr (MoveN 127); Instr (MoveN 127); Instr (MoveN 46) ];
+  expect_parse "right capped" s [ Instr (Move 127); Instr (Move 127); Instr (Move 46) ];
   let s = make '<' 300 in
   expect_parse
     "left capped"
     s
-    [ Instr (MoveN (-128)); Instr (MoveN (-128)); Instr (MoveN (-44)) ]
+    [ Instr (Move (-128)); Instr (Move (-128)); Instr (Move (-44)) ]
 ;;
 
 let test_loops () =
@@ -59,7 +59,7 @@ let test_loops () =
 ;;
 
 let test_ignore_noise () =
-  expect_parse "ignores spaces and others" "a b\n\t+" [ Instr (AddN 1) ]
+  expect_parse "ignores spaces and others" "a b\n\t+" [ Instr (Add 1) ]
 ;;
 
 let show_instr t = Format.asprintf "%a" pp_t t
@@ -106,14 +106,14 @@ let test_resolve_with_body () =
   match parse_sequence "[+-]" |> resolve_jumps with
   | Error err -> Alcotest.failf "resolve error: %a" Compiler.pp_error err
   | Ok instrs ->
-    (* should be: Jz k; AddN 1; AddN -1; Jnz m *)
+    (* should be: Jz k; Add 1; Add -1; Jnz m *)
     (match instrs with
-     | [ Jz _; AddN 1; AddN -1; Jnz _ ] -> ()
+     | [ Jz _; Add 1; Add -1; Jnz _ ] -> ()
      | _ -> Alcotest.fail "unexpected resolved sequence")
 ;;
 
 let test_resolve_with_body_exact () =
-  expect_resolve_exact "with body exact" "[+-]" [ Jz 4; AddN 1; AddN (-1); Jnz (-2) ]
+  expect_resolve_exact "with body exact" "[+-]" [ Jz 4; Add 1; Add (-1); Jnz (-2) ]
 ;;
 
 let test_resolve_nested () =
@@ -134,7 +134,7 @@ let test_resolve_mixed_exact () =
   expect_resolve_exact
     "mixed exact"
     "+[>+<-]-"
-    [ AddN 1; Jz 6; MoveN 1; AddN 1; MoveN (-1); AddN (-1); Jnz (-4); AddN (-1) ]
+    [ Add 1; Jz 6; Move 1; Add 1; Move (-1); Add (-1); Jnz (-4); Add (-1) ]
 ;;
 
 let test_resolve_errors () =
@@ -145,7 +145,7 @@ let test_resolve_errors () =
 let test_fuse_std_ops () =
   let instrs = parse_sequence "+++-->>><<<" |> fuse_std_ops in
   let s = List.map ~f:show_intermediate instrs in
-  Alcotest.(check (list string)) "fused" [ "Instr(AddN(1))" ] s
+  Alcotest.(check (list string)) "fused" [ "Instr(Add(1))" ] s
 ;;
 
 let () =
