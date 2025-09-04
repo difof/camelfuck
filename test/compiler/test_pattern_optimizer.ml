@@ -97,21 +97,25 @@ let test_trailadd () =
 (* ClearCells: chained clears with unit steps; with and without tail back-move folding *)
 let test_clearn () =
   expect
-    "clearn forward true"
+    "clearn forward move"
     "+[-]>[-]-"
-    [ Instr (Add 1); Instr (ClearCells (2, true)); Instr (Add (-1)) ];
+    [ Instr (Add 1); Instr (ClearCells 2); Instr (Move 1); Instr (Add (-1)) ];
   expect
-    "clearn backward true"
+    "clearn backward move"
     "+[-]<[-]-"
-    [ Instr (Add 1); Instr (ClearCells (-2, true)); Instr (Add (-1)) ];
+    [ Instr (Add 1); Instr (ClearCells (-2)); Instr (Move (-1)); Instr (Add (-1)) ];
   expect
-    "clearn forward false fold"
+    "clearn forward fold"
     "+[-]>[-]>[-]<<-"
-    [ Instr (Add 1); Instr (ClearCells (3, false)); Instr (Add (-1)) ];
+    [ Instr (Add 1); Instr (ClearCells 3); Instr (Add (-1)) ];
   expect
-    "clearn backward false fold"
+    "clearn backward fold"
     "+[-]<[-]<[-]>>-"
-    [ Instr (Add 1); Instr (ClearCells (-3, false)); Instr (Add (-1)) ]
+    [ Instr (Add 1); Instr (ClearCells (-3)); Instr (Add (-1)) ];
+  expect
+    "clearn forward move remaining"
+    "+[-]>[-]>[-]<<<-"
+    [ Instr (Add 1); Instr (ClearCells 3); Instr (Move (-1)); Instr (Add (-1)) ]
 ;;
 
 (* SetConst: Clear followed by Add n *)
