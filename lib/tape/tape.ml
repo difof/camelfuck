@@ -164,6 +164,10 @@ let[@inline] mulclear_exn t delta =
     loop 0)
 ;;
 
+let[@inline] trailadd_exn t pairs =
+  pairs |> List.iter ~f:(fun (d, c) -> add_at_offset_exn t d c)
+;;
+
 let[@inline] multransfer_exn t pairs =
   let source_value = get t in
   if source_value <> 0

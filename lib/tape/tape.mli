@@ -84,3 +84,6 @@ val blit_in_ensure_exn : t -> int array -> int -> unit
 
 (* Scan in the direction of [delta] until a zero cell is found; single final pointer move *)
 val scan_to_zero_exn : t -> int -> unit
+
+(* Move add move add ... *)
+val trailadd_exn : t -> (int * int) list -> unit
