@@ -61,11 +61,8 @@ let test_to_char_and_size () =
     (to_char (MultiTransfer []));
   Alcotest.(check int) "MultiTransfer size empty" 2 (byte_size (MultiTransfer []));
   Alcotest.(check int) "MultiTransfer size 2" 6 (byte_size (MultiTransfer [ 1, 2; 3, 4 ]));
-  Alcotest.(check char)
-    "ClearCells opcode"
-    (Char.chr 0x0E)
-    (to_char (ClearCells (0, false)));
-  Alcotest.(check int) "ClearCells size" 3 (byte_size (ClearCells (0, false)))
+  Alcotest.(check char) "ClearCells opcode" (Char.chr 0x0E) (to_char (ClearCells 0));
+  Alcotest.(check int) "ClearCells size" 2 (byte_size (ClearCells 0))
 ;;
 
 let test_encode_i8_ranges () =
@@ -81,8 +78,8 @@ let test_encode_i8_ranges () =
   expect_ok_bytes "TransferStride 5" (TransferStride 5) [ 0x09; 0x05 ];
   expect_error "TransferStride 128" (TransferStride 128);
   expect_ok_bytes "ScanStride -1" (ScanStride (-1)) [ 0x0A; 0xFF ];
-  expect_ok_bytes "ClearCells 2, false" (ClearCells (2, false)) [ 0x0E; 0x02; 0x00 ];
-  expect_ok_bytes "ClearCells -3, true" (ClearCells (-3, true)) [ 0x0E; 0xFD; 0x01 ]
+  expect_ok_bytes "ClearCells 2" (ClearCells 2) [ 0x0E; 0x02 ];
+  expect_ok_bytes "ClearCells -3" (ClearCells (-3)) [ 0x0E; 0xFD ]
 ;;
 
 let test_encode_addat_ranges () =
