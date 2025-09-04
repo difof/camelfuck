@@ -1,21 +1,24 @@
 open Core
 
+type multi_op = (int * int) list
+
 type t =
   | Hang
-  | AddN of int
+  | Add of int
   | AddAt of int * int
-  | MoveN of int
+  | Move of int
   | Jz of int
   | Jnz of int
-  | ScanN of int
-  | TransferN of int
-  | MulTransfer of (int * int) list
+  | ScanStride of int
+  | TransferStride of int
+  | MultiTransfer of multi_op
   | In
   | Out
   | Call
   | Clear
-  | ClearN of int * bool
+  | ClearCells of int * bool
   | SetConst of int
+  | TrailAdd of multi_op
 
 type intr =
   | Instr of t
@@ -24,28 +27,29 @@ type intr =
 
 type error = OperandOutOfBounds of (t * int * int * int)
 
+let rec pp_pairs fmt = function
+  | [] -> ()
+  | [ (d, c) ] -> Format.fprintf fmt "(%d,%d)" d c
+  | (d, c) :: tl -> Format.fprintf fmt "(%d,%d);%a" d c pp_pairs tl
+;;
+
 let pp_t fmt = function
   | Hang -> Format.fprintf fmt "Hang"
-  | AddN n -> Format.fprintf fmt "AddN(%d)" n
-  | MoveN n -> Format.fprintf fmt "MoveN(%d)" n
+  | Add n -> Format.fprintf fmt "Add(%d)" n
+  | Move n -> Format.fprintf fmt "Move(%d)" n
   | Jz n -> Format.fprintf fmt "Jz(%d)" n
   | Jnz n -> Format.fprintf fmt "Jnz(%d)" n
   | In -> Format.fprintf fmt "In"
   | Out -> Format.fprintf fmt "Out"
   | Call -> Format.fprintf fmt "Call"
   | Clear -> Format.fprintf fmt "Clear"
-  | TransferN n -> Format.fprintf fmt "TransferN(%d)" n
-  | ScanN n -> Format.fprintf fmt "ScanN(%d)" n
+  | TransferStride n -> Format.fprintf fmt "TransferStride(%d)" n
+  | ScanStride n -> Format.fprintf fmt "ScanStride(%d)" n
   | AddAt (n, m) -> Format.fprintf fmt "AddAt(%d,%d)" n m
-  | MulTransfer pairs ->
-    let rec pp_pairs fmt = function
-      | [] -> ()
-      | [ (d, c) ] -> Format.fprintf fmt "(%d,%d)" d c
-      | (d, c) :: tl -> Format.fprintf fmt "(%d,%d);%a" d c pp_pairs tl
-    in
-    Format.fprintf fmt "MulTransfer[%a]" pp_pairs pairs
-  | ClearN (n, move) -> Format.fprintf fmt "ClearN(%d,%b)" n move
+  | MultiTransfer pairs -> Format.fprintf fmt "MultiTransfer[%a]" pp_pairs pairs
+  | ClearCells (n, move) -> Format.fprintf fmt "ClearCells(%d,%b)" n move
   | SetConst n -> Format.fprintf fmt "SetConst(%d)" n
+  | TrailAdd pairs -> Format.fprintf fmt "TrailAdd[%a]" pp_pairs pairs
 ;;
 
 let pp_intr fmt = function
@@ -60,10 +64,10 @@ let pp_error fmt = function
 ;;
 
 let byte_size = function
-  | AddN _ | MoveN _ | TransferN _ | ScanN _ | SetConst _ -> 2
-  | AddAt _ | ClearN _ -> 3
+  | Add _ | Move _ | TransferStride _ | ScanStride _ | SetConst _ -> 2
+  | AddAt _ | ClearCells _ -> 3
   | Jz _ | Jnz _ -> 5
-  | MulTransfer pairs -> 2 + (2 * List.length pairs)
+  | MultiTransfer pairs | TrailAdd pairs -> 2 + (2 * List.length pairs)
   | _ -> 1
 ;;
 
@@ -71,25 +75,26 @@ let to_char t =
   let chr = Stdlib.Char.unsafe_chr in
   match t with
   | Hang -> chr 0x00
-  | AddN _ -> chr 0x01
-  | MoveN _ -> chr 0x02
+  | Add _ -> chr 0x01
+  | Move _ -> chr 0x02
   | Jz _ -> chr 0x03
   | Jnz _ -> chr 0x04
   | In -> chr 0x05
   | Out -> chr 0x06
   | Call -> chr 0x07
   | Clear -> chr 0x08
-  | TransferN _ -> chr 0x09
-  | ScanN _ -> chr 0x0A
+  | TransferStride _ -> chr 0x09
+  | ScanStride _ -> chr 0x0A
   | AddAt (_, _) -> chr 0x0B
-  | MulTransfer _ -> chr 0x0C
-  | ClearN _ -> chr 0x0E
+  | MultiTransfer _ -> chr 0x0C
+  | ClearCells _ -> chr 0x0E
   | SetConst _ -> chr 0x0F
+  | TrailAdd _ -> chr 0x10
 ;;
 
 let encode t =
   (* TODO: use Core.Bytes *)
-  (* TODO: improve MulTransfer *)
+  (* TODO: improve MultiTransfer *)
   let open Stdlib in
   let op t size = to_char t |> Bytes.make size in
   let op_no_arg t = Ok (op t 1) in
@@ -130,11 +135,11 @@ let encode t =
     else Ok (op_with_arg t (byte_size t) Bytes.set_int32_le @@ Int32.of_int v)
   in
   match t with
-  | AddN n | MoveN n | TransferN n | ScanN n | SetConst n -> op_with_i8_arg t n
-  | ClearN (n, move) -> op_with_i8_2_arg t (n, if move then 1 else 0)
+  | Add n | Move n | TransferStride n | ScanStride n | SetConst n -> op_with_i8_arg t n
+  | ClearCells (n, move) -> op_with_i8_2_arg t (n, if move then 1 else 0)
   | AddAt (d, n) -> op_with_i8_2_arg t (d, n)
   | Jz rel_pos | Jnz rel_pos -> op_with_int32_arg t rel_pos
-  | MulTransfer pairs ->
+  | MultiTransfer pairs | TrailAdd pairs ->
     let count = List.length pairs in
     if count < 0 || count > 127
     then Error (OperandOutOfBounds (t, count, 0, 127))
