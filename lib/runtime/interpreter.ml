@@ -68,14 +68,6 @@ let hang () =
   done
 ;;
 
-let[@inline] op_clearn t move n =
-  Tape.mulclear_exn t.memory n;
-  if move
-  then (
-    let disp = if n > 0 then n - 1 else if n < 0 then n + 1 else 0 in
-    Tape.move_exn t.memory disp)
-;;
-
 let run_exn t =
   let len = t.program_length in
   while t.pc < len do
@@ -119,8 +111,8 @@ let run_exn t =
     | MultiTransfer pairs ->
       Tape.multransfer_exn t.memory pairs;
       t.pc <- t.pc + 1
-    | ClearCells (n, move) ->
-      op_clearn t move n;
+    | ClearCells n ->
+      Tape.mulclear_exn t.memory n;
       t.pc <- t.pc + 1
     | SetConst n ->
       Tape.set t.memory n;
