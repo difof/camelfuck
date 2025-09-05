@@ -19,7 +19,7 @@
  (name tape))
 
 (package
- (name runtime))
+ (name interpreter))
 
 (package
  (name isa))

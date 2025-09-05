@@ -1,32 +1,35 @@
-open Runtime.Interpreter
+module Root = Interpreter
+module Tape = Tape.Dynamic
+module Interpreter = Interpreter.Make (Tape)
+open Interpreter
 
-let compile_exn s =
+let compile s =
   match Compiler.full_pass s with
   | Ok b -> b
   | Error _ -> failwith "compile error"
 ;;
 
-let make_vm ?io ?(memory = Tape.create 256) code = create ?io ~memory code, memory
+let make_vm ?io ?(memory = Tape.create 256) code = create ?io memory code, memory
 
 let run_vm vm =
   match run vm with
   | Ok _ -> ()
-  | Error err -> Alcotest.failf "Test failed with error: %a" pp_error err
+  | Error err -> Alcotest.failf "Test failed with error: %a" Root.pp_error err
 ;;
 
 let expect_cell name mem idx expected =
   let open Tape in
   let logical_origin = logical_pos mem in
-  move_exn mem (idx - logical_origin);
+  move mem (idx - logical_origin);
   let actual = get mem in
-  move_exn mem (logical_origin - idx);
+  move mem (logical_origin - idx);
   Alcotest.(check int) name expected actual
 ;;
 
 let test_add_and_move () =
   (* Brainfuck: +++>++ moves value 3 at cell0, value 2 at cell1 *)
   let src = "+++>++" in
-  let code = compile_exn src in
+  let code = compile src in
   let vm, mem = make_vm code in
   run_vm vm;
   expect_cell "cell0 is 3" mem 0 3;
@@ -36,7 +39,7 @@ let test_add_and_move () =
 let test_loop_transfer () =
   (* Brainfuck: [>+<-] performs a transfer from cell0 to cell1 *)
   let src = "+++[>+<-]" in
-  let code = compile_exn src in
+  let code = compile src in
   let vm, mem = make_vm code in
   run_vm vm;
   expect_cell "cell0 becomes 0" mem 0 0;
@@ -45,31 +48,32 @@ let test_loop_transfer () =
 
 let test_setzero () =
   let src = "+++[-]" in
-  let code = compile_exn src in
+  let code = compile src in
   let vm, mem = make_vm code in
   run_vm vm;
   expect_cell "cell0 zeroed" mem 0 0
 ;;
 
 let test_hello_progression () =
+  let open Tape in
   (* ensure compiled program runs and leaves specific memory and pointer position *)
   let src =
     "+++++++++++[>++++++>+++++++++>++++++++>++++>+++>+<<<<<<-]>+++\n"
     ^ "+++.>++.+++++++..+++.>>.>-.<<-.<.+++.------.--------.>>>+.>-."
   in
-  let code = compile_exn src in
-  let mem = Tape.create 256 in
-  let vm, _ = make_vm ~memory:mem code in
+  let code = compile src in
+  let memory = create 256 in
+  let vm, _ = make_vm ~memory code in
   run_vm vm;
   (* assert pointer at 6 *)
-  Alcotest.(check int) "pointer at 6" 6 (Tape.logical_pos mem);
+  Alcotest.(check int) "pointer at 6" 6 (logical_pos memory);
   (* read first 7 bytes from index 0 using blit *)
-  let original_pos = Tape.logical_pos mem in
-  Tape.move_exn mem (-original_pos);
+  let original_pos = logical_pos memory in
+  move memory (-original_pos);
   let buf = Array.make 7 0 in
-  Tape.blit_out_exn mem buf 7;
+  blit_out memory buf 7;
   (* restore pointer position *)
-  Tape.move_exn mem original_pos;
+  move memory original_pos;
   let to_list b =
     let rec loop acc i =
       if i = Array.length b then List.rev acc else loop (b.(i) :: acc) (i + 1)

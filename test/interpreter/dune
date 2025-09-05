@@ -1,4 +1,4 @@
 (test
  (name test_interpreter)
- (libraries runtime tape alcotest)
+ (libraries interpreter tape alcotest)
  (modules test_interpreter))

@@ -1,89 +1,35 @@
-(* Bi-directional size capped linear tape memory of bytes *)
+module type S = sig
+  type t
 
-type t
+  val move : t -> int -> unit
+  val scan_to_zero : t -> int -> unit
+  val get : t -> int
+  val set : t -> int -> unit
+  val set_at_offset : t -> int -> int -> unit
+  val add : t -> int -> unit
+  val add_at_offset : t -> int -> int -> unit
+  val mulclear : t -> int -> unit
+  val trailadd : t -> (int * int) list -> unit
+  val multransfer : t -> (int * int) list -> unit
+  val transfer : t -> int -> unit
+  val blit_out : t -> int array -> int -> unit
+  val blit_in : t -> int array -> int -> unit
+  val len : t -> int
+  val bias : t -> int
+  val logical_pos : t -> int
+  val physical_pos : t -> int
+end
 
-type bias_offset =
-  | Start
-  | Middle
+module Dynamic : sig
+  include S
 
-type error =
-  | MaxAllocationReached of int * int
-  | BlitOutOfBounds of int * int * int
-  | BlitNegativeLength of int
+  val create : ?max_size:int -> int -> t
+end
 
-exception TapeExn of error
+module Fixed : sig
+  include S
 
-(* Prints the Tape exceptions *)
-val pp_error : Format.formatter -> error -> unit
+  val create : int -> t
+end
 
-(* Create a new Tape. The initial size will have minimum size of 256 *)
-val create : ?bias_offset:bias_offset -> ?max_size:int -> int -> t
-
-(*
-   Move the Tape pointer by given offset. It can be negative.
-    Throws `MaxAllocationReached`
-*)
-val move_exn : t -> int -> unit
-
-(* Get the value of current Tape pointer *)
-val get : t -> int
-
-(* Set the value of current Tape pointer masked by 0xFF *)
-val set : t -> int -> unit
-
-(* Add to current cell (masked) *)
-val add : t -> int -> unit
-
-(* Write at logical offset from current pointer without moving it (masked) *)
-val set_at_offset_exn : t -> int -> int -> unit
-
-(* Add a value at logical offset from current pointer without moving it (masked) *)
-val add_at_offset_exn : t -> int -> int -> unit
-
-(* Clear N amount of cells from current pointer *)
-val mulclear_exn : t -> int -> unit
-
-(* Multiply-add transfer from current cell to offsets; zeroes source if non-zero *)
-val multransfer_exn : t -> (int * int) list -> unit
-
-(* Atomically move current cell's value to [delta] and zero the source if non-zero *)
-val transfer_exn : t -> int -> unit
-
-(* Get the total length of the Tape *)
-val len : t -> int
-
-(* Get the center bias of the Tape, used for negative/positive indexing *)
-val bias : t -> int
-
-(* Get the logical Tape pointer position, it can be negative *)
-val logical_pos : t -> int
-
-(* Get the computed physical Tape pointer position in the buffer *)
-val physical_pos : t -> int
-
-(* Get the max size of the Tape. It cannot grow larger than this *)
-val max_size : t -> int
-
-(*
-   Get a slice of the Tape. 
-    If given size is larger than Tape's current position + len, it will throw `BlitOutOfBounds`
-*)
-val blit_out_exn : t -> int array -> int -> unit
-
-(*
-   Copy the given buffer's contents into Tape, starting at current tape pointer. 
-    If Tape limits are reached, it won't grow and throw `BlitOutOfBounds` instead.
-*)
-val blit_in_exn : t -> int array -> int -> unit
-
-(*
-   Copy the given buffer's contents into Tape, starting at current tape pointer. 
-    It will grow the Tape as needed.
-*)
-val blit_in_ensure_exn : t -> int array -> int -> unit
-
-(* Scan in the direction of [delta] until a zero cell is found; single final pointer move *)
-val scan_to_zero_exn : t -> int -> unit
-
-(* Move add move add ... *)
-val trailadd_exn : t -> (int * int) list -> unit
+module TapeError = Tape_error

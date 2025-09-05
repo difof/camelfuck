@@ -5,11 +5,11 @@ open Cmdliner.Term.Syntax
 
 type optimized_error =
   | CompileError of Compiler.error
-  | VMError of Runtime.Interpreter.error
+  | InterpreterError of Interpreter.error
 
 let pp_optimized_error fmt = function
   | CompileError err -> Format.fprintf fmt "compile error: %a" Compiler.pp_error err
-  | VMError err -> Format.fprintf fmt "VM error: %a" Runtime.Interpreter.pp_error err
+  | InterpreterError err -> Format.fprintf fmt "VM error: %a" Interpreter.pp_error err
 ;;
 
 type optimization =
@@ -56,16 +56,19 @@ let compile (flags : optimize_flags) (source : string)
   |> Result.map_error ~f:(fun err -> CompileError err)
 ;;
 
-let run_vm (program : Isa.t list) : (unit, optimized_error) result =
-  let open Runtime.Interpreter in
-  let vm = create ~memory:(Tape.create ~max_size:(1 lsl 26) 16000) program in
-  run vm |> Result.map_error ~f:(fun err -> VMError err)
+module Interpreter_dynamic = Interpreter.Make (Tape.Dynamic)
+module Interpreter_fixed = Interpreter.Make (Tape.Fixed)
+
+let run_vm_fixed (program : Isa.t list) : (unit, optimized_error) result =
+  let memory = Tape.Fixed.create 16000 in
+  let vm = Interpreter_fixed.create memory program in
+  Interpreter_fixed.run vm |> Result.map_error ~f:(fun err -> InterpreterError err)
 ;;
 
-let run_raw program =
-  match Runtime.Basic.run program with
-  | Error err -> Format.eprintf "error: %a@\n" Runtime.Basic.pp_error err
-  | Ok _ -> ()
+let run_vm_dynamic (program : Isa.t list) : (unit, optimized_error) result =
+  let memory = Tape.Dynamic.create ~max_size:(1 lsl 26) 16000 in
+  let vm = Interpreter_dynamic.create memory program in
+  Interpreter_dynamic.run vm |> Result.map_error ~f:(fun err -> InterpreterError err)
 ;;
 
 let optimization_of_string = function
@@ -99,13 +102,14 @@ let optimization_list_conv : optimization list Arg.conv =
   Arg.conv (parse, print)
 ;;
 
-let raw_flag =
+let tape_flag : [ `Fixed | `Dynamic ] Cmdliner.Term.t =
+  let doc =
+    "Choose the tape implementation: $(b,fixed) or $(b,dynamic). Default is $(b,fixed)."
+  in
   Arg.(
     value
-    & flag
-    & info
-        [ "raw" ]
-        ~doc:"Run the raw interpreter; ignore optimization and timing options")
+    & opt (enum [ "fixed", `Fixed; "dynamic", `Dynamic ]) `Fixed
+    & info [ "tape"; "t" ] ~doc ~docv:"KIND")
 ;;
 
 let disable_opt =
@@ -155,62 +159,60 @@ let infile =
   Arg.(value & pos 0 string "-" & info [] ~doc ~docv:"FILE")
 ;;
 
-let tool ~raw ~disable ~enable ~pp_compiled ~time ~instructions ~dry ~infile =
+let tool ~disable ~enable ~pp_compiled ~time ~instructions ~dry ~infile ~tape =
   let program =
     if String.(infile = "-")
     then In_channel.input_all stdin
     else In_channel.read_all infile
   in
-  if raw
-  then (
-    run_raw program;
-    Cmdliner.Cmd.Exit.ok)
-  else (
-    let flags =
-      let disable = List.concat disable in
-      let enable = List.concat enable in
-      let after_disable =
-        List.fold_left ~f:apply_disable ~init:all_optimizations disable
+  let flags =
+    let disable = List.concat disable in
+    let enable = List.concat enable in
+    let after_disable = List.fold_left ~f:apply_disable ~init:all_optimizations disable in
+    let after_enable = List.fold_left ~f:apply_enable ~init:after_disable enable in
+    after_enable
+  in
+  let compile_start = if time then Some (Time_ns.now ()) else None in
+  match compile flags program with
+  | Error err ->
+    Format.eprintf "error: %a@\n" pp_optimized_error err;
+    1
+  | Ok compiled_program ->
+    (match instructions with
+     | true ->
+       Out_channel.printf
+         "Compiled %d raw instructions to %d\n\n"
+         (String.length program)
+         (List.length compiled_program)
+     | false -> ());
+    (match pp_compiled with
+     | true -> build_ir flags program |> pp_ir ~spacing:2
+     | false -> ());
+    (match compile_start, time with
+     | Some t0, true ->
+       let dt = Time_ns.diff (Time_ns.now ()) t0 in
+       Out_channel.printf "Compile time: %s\n" (Time_ns.Span.to_string dt)
+     | _ -> ());
+    if dry
+    then Cmdliner.Cmd.Exit.ok
+    else (
+      let run_start = if time then Some (Time_ns.now ()) else None in
+      let result =
+        match tape with
+        | `Fixed -> run_vm_fixed compiled_program
+        | `Dynamic -> run_vm_dynamic compiled_program
       in
-      let after_enable = List.fold_left ~f:apply_enable ~init:after_disable enable in
-      after_enable
-    in
-    let compile_start = if time then Some (Time_ns.now ()) else None in
-    match compile flags program with
-    | Error err ->
-      Format.eprintf "error: %a@\n" pp_optimized_error err;
-      1
-    | Ok compiled_program ->
-      (match instructions with
-       | true ->
-         Out_channel.printf
-           "Compiled %d raw instructions to %d\n\n"
-           (String.length program)
-           (List.length compiled_program)
-       | false -> ());
-      (match pp_compiled with
-       | true -> build_ir flags program |> pp_ir ~spacing:2
-       | false -> ());
-      (match compile_start, time with
-       | Some t0, true ->
-         let dt = Time_ns.diff (Time_ns.now ()) t0 in
-         Out_channel.printf "Compile time: %s\n" (Time_ns.Span.to_string dt)
-       | _ -> ());
-      if dry
-      then Cmdliner.Cmd.Exit.ok
-      else (
-        let run_start = if time then Some (Time_ns.now ()) else None in
-        match run_vm compiled_program with
-        | Ok () ->
-          (match run_start, time with
-           | Some t0, true ->
-             let dt = Time_ns.diff (Time_ns.now ()) t0 in
-             Out_channel.printf "Run time: %s\n" (Time_ns.Span.to_string dt)
-           | _ -> ());
-          Cmdliner.Cmd.Exit.ok
-        | Error err ->
-          Format.eprintf "error: %a@\n" pp_optimized_error err;
-          1))
+      match result with
+      | Ok () ->
+        (match run_start, time with
+         | Some t0, true ->
+           let dt = Time_ns.diff (Time_ns.now ()) t0 in
+           Out_channel.printf "Run time: %s\n" (Time_ns.Span.to_string dt)
+         | _ -> ());
+        Cmdliner.Cmd.Exit.ok
+      | Error err ->
+        Format.eprintf "error: %a@\n" pp_optimized_error err;
+        1)
 ;;
 
 let cmd =
@@ -225,15 +227,15 @@ let cmd =
   in
   Cmd.v (Cmd.info "camelfuck" ~doc ~man)
   @@
-  let+ raw = raw_flag
-  and+ disable = disable_opt
+  let+ disable = disable_opt
   and+ enable = enable_opt
   and+ pp_compiled = pp_compiled_flag
   and+ time = time_flag
   and+ instructions = instructions_flags
   and+ dry = dry_flag
+  and+ tape = tape_flag
   and+ infile = infile in
-  tool ~raw ~disable ~enable ~pp_compiled ~time ~instructions ~dry ~infile
+  tool ~disable ~enable ~pp_compiled ~time ~instructions ~dry ~infile ~tape
 ;;
 
 let main () = Cmd.eval' cmd

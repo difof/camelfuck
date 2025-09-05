@@ -2,7 +2,7 @@
  (package camelfuck)
  (public_name camelfuck)
  (name camelfuck)
- (libraries core stdio cmdliner tape runtime isa compiler)
+ (libraries core stdio cmdliner tape interpreter isa compiler)
  ; (instrumentation
  ;  (backend landmarks))
  ; (preprocess

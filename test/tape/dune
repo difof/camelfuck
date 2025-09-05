@@ -1,4 +1,4 @@
 (test
- (name test_tape)
+ (name test_dynamic_tape)
  (libraries tape alcotest)
- (modules test_tape))
+ (modules test_dynamic_tape))

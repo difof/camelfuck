@@ -1,7 +1,6 @@
 (library
- (name runtime)
- (public_name runtime)
- (modules interpreter basic) ; handleman extcall)
+ (name interpreter)
+ (public_name interpreter)
  (libraries core tape isa compiler)
  ; (instrumentation
  ;  (backend landmarks))
